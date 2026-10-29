@@ -3,10 +3,13 @@
  * -------------------------------------------------
  * Centraliza:
  *   - criação validada do cliente @supabase/supabase-js v2;
- *   - login, logout e sessão;
- *   - verificação da lista de usuários autorizados;
+ *   - login, cadastro público, confirmação de e-mail, logout e sessão;
  *   - leitura/gravação de observações e configurações com RLS;
  *   - migração e mensagens de erro compreensíveis.
+ *
+ * O acesso não depende de lista manual: cada conta autenticada enxerga
+ * somente as próprias linhas, porque as políticas RLS exigem
+ * owner_id = auth.uid(). Não existe papel de administrador no navegador.
  *
  * Este arquivo nunca deve conter chaves secretas. A chave usada aqui é a
  * chave pública do projeto (sb_publishable_...), visível no navegador.
@@ -24,11 +27,17 @@ window.ObservaEduSupabase = (function () {
 
   const TABLES = {
     observations: CONFIG.observationsTable || 'observaedu_observations',
-    settings: CONFIG.settingsTable || 'observaedu_settings',
-    allowlist: CONFIG.allowlistTable || 'observaedu_authorized_users'
+    settings: CONFIG.settingsTable || 'observaedu_settings'
   };
 
   const ID_PATTERN = /^obs_[A-Za-z0-9_-]{6,}$/;
+
+  // Para onde o Supabase redireciona depois da confirmação de e-mail.
+  // A URL precisa estar cadastrada em Authentication > URL Configuration.
+  function redirectUrl() {
+    if (typeof window === 'undefined' || !window.location) return undefined;
+    return window.location.origin + window.location.pathname;
+  }
 
   let client = null;
   let clientFailure = null;
@@ -126,7 +135,8 @@ window.ObservaEduSupabase = (function () {
         auth: {
           persistSession: true,
           autoRefreshToken: true,
-          detectSessionInUrl: false,
+          // Necessário para concluir o link de confirmação de e-mail.
+          detectSessionInUrl: true,
           flowType: 'pkce',
           // Chave própria para não colidir com outros usos na mesma origem.
           storageKey: 'observaedu.supabase.auth.v1'
@@ -162,11 +172,36 @@ window.ObservaEduSupabase = (function () {
     if (/invalid login credentials|invalid_credentials/i.test(message)) {
       return 'E-mail ou senha incorretos.';
     }
+    if (/pkce|code verifier|code challenge/i.test(message)) {
+      return (
+        'O link de confirmação foi aberto em outro navegador ou dispositivo. ' +
+        'A conta pode já estar confirmada; entre com e-mail e senha. Se ainda não estiver, ' +
+        'solicite um novo link de confirmação.'
+      );
+    }
     if (/email not confirmed/i.test(message)) {
-      return 'O e-mail desta conta ainda não foi confirmado no Supabase.';
+      return 'O e-mail desta conta ainda não foi confirmado. Abra o link enviado pelo Supabase antes de entrar.';
     }
     if (/too many requests|rate.?limit|over_email_send_rate_limit/i.test(message)) {
       return 'Muitas tentativas em pouco tempo. Aguarde alguns minutos e tente novamente.';
+    }
+    if (/already registered|already exists|email_exists|user_already_exists/i.test(message)) {
+      return (
+        'Já existe uma conta com este e-mail. Use "Entrar" ou solicite a redefinição de senha ' +
+        'ao responsável pelo projeto.'
+      );
+    }
+    if (/weak.?password|password should be at least|password.*too short|passwords?.*characters/i.test(message)) {
+      return 'A senha é muito fraca. Use pelo menos 6 caracteres e evite senhas comuns.';
+    }
+    if (/signups? (are )?(not allowed|disabled)|signup.*disabled|email signups?.*disabled/i.test(message)) {
+      return (
+        'O cadastro público está desativado neste projeto Supabase. ' +
+        'Ative "Allow new users to sign up" em Authentication e tente novamente.'
+      );
+    }
+    if (/email address.*invalid|invalid.*email|email_address_invalid/i.test(message)) {
+      return 'O e-mail informado não foi aceito pelo Supabase. Verifique o endereço e tente novamente.';
     }
     if (/user not found/i.test(message)) {
       return 'Usuário não encontrado. Verifique o e-mail informado.';
@@ -188,7 +223,7 @@ window.ObservaEduSupabase = (function () {
     if (/row-level security|permission denied|42501/i.test(message)) {
       return (
         'A conta autenticada não tem permissão para esta operação. ' +
-        'Verifique as políticas RLS e se o usuário está na lista de autorizados.'
+        'Verifique as políticas RLS (owner_id = auth.uid()) no Supabase.'
       );
     }
     if (/jwt|refresh token|sessão|session/i.test(message)) {
@@ -197,7 +232,7 @@ window.ObservaEduSupabase = (function () {
     if (/relation .* does not exist|42P01|schema cache|does not exist/i.test(message)) {
       return (
         'A estrutura do banco ainda não foi criada ou está incompleta. ' +
-        'Revise e execute supabase_schema.sql no painel do Supabase.'
+        'Execute supabase_schema.sql e, se o banco já existia, supabase_signup_update.sql.'
       );
     }
     if (/duplicate key|23505/i.test(message)) {
@@ -262,36 +297,58 @@ window.ObservaEduSupabase = (function () {
     }
   }
 
-  // Confirma se o usuário autenticado está na lista de autorizados.
-  // A própria RLS também aplica essa regra; esta checagem serve para
-  // mostrar uma mensagem clara na interface.
-  async function checkAccess() {
+  // Cadastro público com e-mail e senha. O Supabase pode:
+  //   - devolver uma sessão (confirmação de e-mail desativada);
+  //   - devolver só o usuário (confirmação pendente);
+  //   - devolver um usuário sem "identities" quando o e-mail já existe
+  //     (comportamento anti-enumeração com confirmação ativada).
+  async function signUp(email, password) {
     try {
-      const session = await requireSession();
       const supabase = getClient();
-      const { data, error } = await supabase
-        .from(TABLES.allowlist)
-        .select('user_id')
-        .eq('user_id', session.user.id)
-        .maybeSingle();
+      const { data, error } = await supabase.auth.signUp({
+        email: email,
+        password: password,
+        options: { emailRedirectTo: redirectUrl() }
+      });
 
       if (error) {
-        if (/relation .* does not exist|42P01|schema cache/i.test(String(error.message || ''))) {
-          return {
-            ok: false,
-            error:
-              'A lista de usuários autorizados ainda não existe no banco. ' +
-              'Execute supabase_schema.sql e autorize esta conta antes de entrar.'
-          };
-        }
-        return { ok: false, error: friendlyError(error) };
+        return { ok: false, code: String(error.code || ''), error: friendlyError(error) };
       }
 
-      return {
-        ok: true,
-        allowed: !!(data && data.user_id),
-        userId: session.user.id
-      };
+      const user = data && data.user ? data.user : null;
+      const session = data && data.session ? data.session : null;
+
+      if (user && Array.isArray(user.identities) && user.identities.length === 0) {
+        return {
+          ok: false,
+          code: 'email_exists',
+          error:
+            'Já existe uma conta com este e-mail. Use "Entrar" ou solicite a redefinição de senha ' +
+            'ao responsável pelo projeto.'
+        };
+      }
+
+      if (!session) {
+        return { ok: true, needsConfirmation: true, user: user };
+      }
+
+      return { ok: true, needsConfirmation: false, user: user, session: session };
+    } catch (error) {
+      return { ok: false, error: friendlyError(error) };
+    }
+  }
+
+  // Reenvia o e-mail de confirmação de cadastro.
+  async function resendConfirmation(email) {
+    try {
+      const supabase = getClient();
+      const { error } = await supabase.auth.resend({
+        type: 'signup',
+        email: email,
+        options: { emailRedirectTo: redirectUrl() }
+      });
+      if (error) return { ok: false, error: friendlyError(error) };
+      return { ok: true };
     } catch (error) {
       return { ok: false, error: friendlyError(error) };
     }
@@ -662,8 +719,9 @@ window.ObservaEduSupabase = (function () {
     friendlyError: friendlyError,
     getSession: getSession,
     signIn: signIn,
+    signUp: signUp,
+    resendConfirmation: resendConfirmation,
     signOut: signOut,
-    checkAccess: checkAccess,
     onAuthStateChange: onAuthStateChange,
     listObservations: listObservations,
     getObservation: getObservation,

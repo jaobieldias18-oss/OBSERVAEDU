@@ -952,7 +952,7 @@
     setText(
       'privacyItemBrowser',
       cloud
-        ? 'O acesso depende da conta autorizada e das políticas RLS do banco. Ao usar computadores compartilhados, encerre a sessão ao terminar.'
+        ? 'O acesso depende da sua conta e das políticas RLS do banco. Ao usar computadores compartilhados, encerre a sessão ao terminar.'
         : 'Qualquer pessoa com acesso a este navegador e a este computador pode consultar os dados armazenados.'
     );
     setText(
@@ -976,7 +976,7 @@
     setText(
       'futureText',
       cloud
-        ? 'A versão 1.1.0 usa Supabase Auth e PostgreSQL com Row Level Security. A análise ' +
+        ? 'A versão 1.2.0 usa Supabase Auth (com cadastro público) e PostgreSQL com Row Level Security. A análise ' +
             'continua baseada em regras explícitas de JavaScript e exige revisão humana. ' +
             'Não há sincronização offline fictícia nem integração com IA.'
         : 'Esta versão foi organizada em camadas simples (configuração, armazenamento, análise, ' +
@@ -989,7 +989,7 @@
     if (footer) {
       footer.textContent =
         'ObservaEdu · Versão ' +
-        (CONFIG.version || '1.1.0') +
+        (CONFIG.version || '1.2.0') +
         ' · ' +
         (cloud
           ? 'Registros salvos na nuvem (Supabase).'
@@ -3911,7 +3911,7 @@
       title: 'Sair da conta',
       message:
         'Você será desconectado. Os registros permanecem no servidor e só poderão ser ' +
-        'acessados após um novo login com conta autorizada. Deseja sair?',
+        'acessados após um novo login com sua conta. Deseja sair?',
       confirmLabel: 'Sair da conta'
     });
     if (!confirmed) return;

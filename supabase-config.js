@@ -6,9 +6,11 @@
  * (sb_publishable_...). Nunca use sb_secret_..., service_role ou senhas.
  *
  * A segurança real depende de:
- *   1. Supabase Auth (login obrigatório);
- *   2. Row Level Security (RLS) nas tabelas;
- *   3. lista de usuários autorizados no banco.
+ *   1. Supabase Auth (login obrigatório, com cadastro público opcional);
+ *   2. Row Level Security (RLS) nas tabelas, sempre por owner_id = auth.uid().
+ *
+ * Não existe lista manual de autorizados nem papel de administrador no
+ * navegador: cada conta acessa apenas os próprios registros.
  *
  * Se publishableKey ficar vazia, o ObservaEdu continua funcionando em modo
  * local (localStorage), sem login e sem enviar registros para a nuvem.
@@ -25,6 +27,5 @@ window.OBSERVAEDU_SUPABASE_CONFIG = {
 
   // Nomes das tabelas criadas por supabase_schema.sql.
   observationsTable: 'observaedu_observations',
-  settingsTable: 'observaedu_settings',
-  allowlistTable: 'observaedu_authorized_users'
+  settingsTable: 'observaedu_settings'
 };

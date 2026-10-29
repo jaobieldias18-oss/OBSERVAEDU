@@ -17,8 +17,8 @@
   <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
   <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
   <link rel="apple-touch-icon" sizes="180x180" href="icons/apple-touch-icon-180.png">
-  <link rel="stylesheet" href="styles.css?v=1.1.0">
-  <script src="supabase-config.js?v=1.1.0"></script>
+  <link rel="stylesheet" href="styles.css?v=1.2.0">
+  <script src="supabase-config.js?v=1.2.0"></script>
   <script>
     // Bloqueia visualmente a área interna antes de o auth.js carregar quando
     // houver uma chave pública configurada. Sem chave, o modo local continua.
@@ -183,7 +183,7 @@
 
   <a class="skip-link" href="#mainContent">Ir para o conteúdo principal</a>
 
-  <!-- Tela de login: bloqueia a área interna quando o Supabase está configurado. -->
+  <!-- Tela de entrada: bloqueia a área interna quando o Supabase está configurado. -->
   <div class="auth-gate" id="authGate" hidden>
     <main class="auth-card" aria-labelledby="authTitle">
       <div class="auth-brand">
@@ -194,8 +194,13 @@
         </div>
       </div>
 
+      <div class="auth-tabs" role="group" aria-label="Entrar ou criar conta">
+        <button class="auth-tab is-active" type="button" data-auth-mode="signin" aria-pressed="true">Entrar</button>
+        <button class="auth-tab" type="button" data-auth-mode="signup" aria-pressed="false">Criar minha conta</button>
+      </div>
+
       <h1 class="auth-title" id="authTitle">Entrar no ObservaEdu</h1>
-      <p class="auth-subtitle">Acesso restrito à equipe pedagógica autorizada.</p>
+      <p class="auth-subtitle" id="authSubtitle">Acesse seus registros, relatórios e configurações.</p>
 
       <p class="auth-loading" id="authLoading" role="status" hidden>Verificando sessão...</p>
 
@@ -208,7 +213,7 @@
 
         <div class="auth-field">
           <label for="authPassword">Senha</label>
-          <input id="authPassword" name="password" type="password" autocomplete="current-password" required minlength="6" aria-describedby="authPasswordError">
+          <input id="authPassword" name="password" type="password" autocomplete="current-password" required minlength="6" maxlength="72" aria-describedby="authPasswordError">
           <p class="auth-field-error" id="authPasswordError" hidden></p>
         </div>
 
@@ -216,17 +221,21 @@
 
         <button class="btn btn-primary auth-submit" id="authSubmit" type="submit">
           <svg class="icon" aria-hidden="true"><use href="#i-lock"></use></svg>
-          <span>Entrar</span>
+          <span id="authSubmitLabel">Entrar</span>
+        </button>
+
+        <button class="auth-link" id="authResend" type="button" hidden>
+          Reenviar e-mail de confirmação
         </button>
       </form>
 
-      <p class="auth-help">
-        Não há cadastro público nesta tela. A conta é criada e autorizada pelo responsável
-        do projeto no painel do Supabase.
+      <p class="auth-help" id="authHelp">
+        Ainda não tem conta? Use “Criar minha conta”. Os dados de cada conta são isolados
+        pelas políticas de segurança do banco.
       </p>
       <p class="auth-help auth-help--small">
-        A chave usada pelo navegador é pública. A proteção dos registros depende do login,
-        das políticas RLS e da lista de usuários autorizados.
+        A chave usada pelo navegador é pública. A proteção dos registros depende do login e
+        das políticas RLS do Supabase; cada conta acessa somente os próprios dados.
       </p>
     </main>
   </div>
@@ -869,7 +878,7 @@
 
               <div class="cloud-account">
                 <div>
-                  <span class="storage-label">Conta autorizada</span>
+                  <span class="storage-label">Conta conectada</span>
                   <strong id="cloudAccountEmail">—</strong>
                 </div>
                 <div>
@@ -968,7 +977,7 @@
       </main>
 
       <footer class="app-footer no-print">
-        <p id="appFooterText">ObservaEdu · Versão 1.1.0 · Dados salvos apenas neste navegador.</p>
+        <p id="appFooterText">ObservaEdu · Versão 1.2.0 · Dados salvos apenas neste navegador.</p>
         <button class="link-button" type="button" data-action="open-help">Como usar o sistema</button>
       </footer>
     </div>
@@ -1031,13 +1040,13 @@
 
   <!-- Ordem importante: configuração (head) → cliente Supabase → armazenamento →
        análise → relatório → autenticação → interface -->
-  <script src="questions.js?v=1.1.0"></script>
-  <script src="vendor/supabase-js-2.118.0.js?v=1.1.0"></script>
-  <script src="supabase.js?v=1.1.0"></script>
-  <script src="storage.js?v=1.1.0"></script>
-  <script src="analysis.js?v=1.1.0"></script>
-  <script src="report.js?v=1.1.0"></script>
-  <script src="auth.js?v=1.1.0"></script>
-  <script src="app.js?v=1.1.0"></script>
+  <script src="questions.js?v=1.2.0"></script>
+  <script src="vendor/supabase-js-2.118.0.js?v=1.2.0"></script>
+  <script src="supabase.js?v=1.2.0"></script>
+  <script src="storage.js?v=1.2.0"></script>
+  <script src="analysis.js?v=1.2.0"></script>
+  <script src="report.js?v=1.2.0"></script>
+  <script src="auth.js?v=1.2.0"></script>
+  <script src="app.js?v=1.2.0"></script>
 </body>
 </html>

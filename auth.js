@@ -1,25 +1,34 @@
 /*
- * ObservaEdu — Autenticação e bloqueio da área interna
- * ----------------------------------------------------
+ * ObservaEdu — Autenticação, cadastro e bloqueio da área interna
+ * ---------------------------------------------------------------
  * Responsabilidades:
- *   - exibir a tela de login quando o Supabase está configurado;
+ *   - exibir a tela de entrada quando o Supabase está configurado;
+ *   - permitir cadastro público com e-mail e senha (Supabase Auth);
+ *   - tratar confirmação de e-mail quando habilitada no projeto;
  *   - restaurar a sessão salva ao abrir/recarregar a aplicação;
- *   - impedir o uso da área interna sem sessão válida e autorizada;
- *   - validar os campos, mostrar erros claros e permitir logout.
+ *   - impedir o uso da área interna sem sessão válida;
+ *   - validar campos, mostrar erros claros e permitir logout.
  *
- * Não há cadastro público nesta tela. A conta é criada e autorizada
- * manualmente pelo responsável do projeto no painel do Supabase.
+ * Não existe lista manual de autorizados nem papel de administrador no
+ * navegador. O isolamento é feito pelas políticas RLS
+ * (owner_id = auth.uid()) no PostgreSQL. A administração do projeto
+ * (contas, banco, políticas) acontece apenas no painel do Supabase.
  */
 
 window.ObservaEduAuth = (function () {
   'use strict';
 
   const Supabase = window.ObservaEduSupabase;
+  const MIN_PASSWORD = 6;
+  const MAX_PASSWORD = 72; // limite do bcrypt usado pelo Supabase Auth
+
   let callbacks = { onSignedIn: null, onSignedOut: null };
   let wired = false;
   let busy = false;
   let manualSignOut = false;
   let subscribed = false;
+  let mode = 'signin'; // 'signin' | 'signup'
+  let pendingEmail = '';
 
   function $(id) {
     return document.getElementById(id);
@@ -58,7 +67,8 @@ window.ObservaEduAuth = (function () {
     if (visible) {
       window.setTimeout(function () {
         const email = $('authEmail');
-        if (email && !$('authForm').hidden) email.focus();
+        const form = $('authForm');
+        if (email && form && !form.hidden) email.focus();
       }, 60);
     }
   }
@@ -87,29 +97,31 @@ window.ObservaEduAuth = (function () {
   }
 
   function clearFieldErrors() {
-    const email = $('authEmail');
-    const password = $('authPassword');
-    const emailError = $('authEmailError');
-    const passwordError = $('authPasswordError');
+    ['authEmail', 'authPassword'].forEach(function (id) {
+      const field = $(id);
+      if (field) field.removeAttribute('aria-invalid');
+    });
+    ['authEmailError', 'authPasswordError'].forEach(function (id) {
+      const box = $(id);
+      if (box) {
+        box.hidden = true;
+        box.textContent = '';
+      }
+    });
+  }
 
-    if (email) email.removeAttribute('aria-invalid');
-    if (password) password.removeAttribute('aria-invalid');
-    if (emailError) {
-      emailError.hidden = true;
-      emailError.textContent = '';
-    }
-    if (passwordError) {
-      passwordError.hidden = true;
-      passwordError.textContent = '';
+  function setFieldError(fieldId, errorId, message) {
+    const field = $(fieldId);
+    const box = $(errorId);
+    if (field) field.setAttribute('aria-invalid', 'true');
+    if (box) {
+      box.hidden = false;
+      box.textContent = message;
     }
   }
 
-  function setFieldError(field, errorBox, message) {
-    if (field) field.setAttribute('aria-invalid', 'true');
-    if (errorBox) {
-      errorBox.hidden = false;
-      errorBox.textContent = message;
-    }
+  function isValidEmail(email) {
+    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
   }
 
   function validate(email, password) {
@@ -117,38 +129,120 @@ window.ObservaEduAuth = (function () {
     let valid = true;
 
     if (!email) {
-      setFieldError($('authEmail'), $('authEmailError'), 'Informe o e-mail da conta.');
+      setFieldError('authEmail', 'authEmailError', 'Informe o e-mail da conta.');
       valid = false;
-    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-      setFieldError($('authEmail'), $('authEmailError'), 'Informe um e-mail válido.');
+    } else if (!isValidEmail(email)) {
+      setFieldError('authEmail', 'authEmailError', 'Informe um e-mail válido.');
       valid = false;
     }
 
     if (!password) {
-      setFieldError($('authPassword'), $('authPasswordError'), 'Informe a senha.');
-      valid = false;
-    } else if (password.length < 6) {
       setFieldError(
-        $('authPassword'),
-        $('authPasswordError'),
-        'A senha deve ter pelo menos 6 caracteres.'
+        'authPassword',
+        'authPasswordError',
+        mode === 'signup' ? 'Crie uma senha para sua conta.' : 'Informe a senha.'
+      );
+      valid = false;
+    } else if (password.length < MIN_PASSWORD) {
+      setFieldError(
+        'authPassword',
+        'authPasswordError',
+        'A senha deve ter pelo menos ' + MIN_PASSWORD + ' caracteres.'
+      );
+      valid = false;
+    } else if (password.length > MAX_PASSWORD) {
+      setFieldError(
+        'authPassword',
+        'authPasswordError',
+        'A senha deve ter no máximo ' + MAX_PASSWORD + ' caracteres.'
       );
       valid = false;
     }
 
-    if (!valid) setMessage('Revise os campos destacados para entrar.', 'error');
+    if (!valid) {
+      setMessage(
+        mode === 'signup'
+          ? 'Revise os campos destacados para criar a conta.'
+          : 'Revise os campos destacados para entrar.',
+        'error'
+      );
+    }
     return valid;
+  }
+
+  function submitLabel() {
+    if (busy) return mode === 'signup' ? 'Criando conta...' : 'Entrando...';
+    return mode === 'signup' ? 'Criar minha conta' : 'Entrar';
   }
 
   function setBusy(value) {
     busy = !!value;
     const submit = $('authSubmit');
+    const label = $('authSubmitLabel');
+    const resend = $('authResend');
     const form = $('authForm');
-    if (submit) {
-      submit.disabled = busy;
-      submit.textContent = busy ? 'Entrando...' : 'Entrar';
-    }
+    if (label) label.textContent = submitLabel();
+    if (submit) submit.disabled = busy;
+    if (resend) resend.disabled = busy;
     if (form) form.setAttribute('aria-busy', busy ? 'true' : 'false');
+  }
+
+  function setMode(next, options) {
+    const opts = options || {};
+    mode = next === 'signup' ? 'signup' : 'signin';
+
+    document.querySelectorAll('[data-auth-mode]').forEach(function (button) {
+      const isActive = button.dataset.authMode === mode;
+      button.classList.toggle('is-active', isActive);
+      button.setAttribute('aria-pressed', isActive ? 'true' : 'false');
+    });
+
+    const title = $('authTitle');
+    const subtitle = $('authSubtitle');
+    const help = $('authHelp');
+    const password = $('authPassword');
+    const passwordError = $('authPasswordError');
+    const resend = $('authResend');
+
+    if (title) {
+      title.textContent =
+        mode === 'signup' ? 'Criar conta no ObservaEdu' : 'Entrar no ObservaEdu';
+    }
+    if (subtitle) {
+      subtitle.textContent =
+        mode === 'signup'
+          ? 'Cadastre-se com e-mail e senha. Leva menos de um minuto.'
+          : 'Acesse seus registros, relatórios e configurações.';
+    }
+    if (help) {
+      help.textContent =
+        mode === 'signup'
+          ? 'Ao criar a conta, você concorda em usar o ObservaEdu apenas para registros pedagógicos. ' +
+            'Cada conta acessa somente os próprios dados.'
+          : 'Ainda não tem conta? Use “Criar minha conta”. Os dados de cada conta são isolados ' +
+            'pelas políticas de segurança do banco.';
+    }
+    if (password) {
+      password.setAttribute(
+        'autocomplete',
+        mode === 'signup' ? 'new-password' : 'current-password'
+      );
+    }
+    if (passwordError) {
+      passwordError.hidden = true;
+      passwordError.textContent = '';
+    }
+    if (resend) resend.hidden = true;
+
+    if (!opts.keepEmail) {
+      const email = $('authEmail');
+      if (email && !opts.keepValue) email.value = '';
+    }
+    if (password && !opts.keepPassword) password.value = '';
+
+    clearFieldErrors();
+    setMessage('', '');
+    setBusy(busy); // atualiza o rótulo do botão sem mudar o estado ocupado
   }
 
   function showGate(message, tone) {
@@ -160,6 +254,36 @@ window.ObservaEduAuth = (function () {
   function hideGate() {
     setMessage('', '');
     setGate(false);
+  }
+
+  function showResend(email) {
+    pendingEmail = email;
+    const resend = $('authResend');
+    if (resend) resend.hidden = false;
+  }
+
+  function handleSignedIn(session) {
+    // Depois de qualquer entrada bem-sucedida, a próxima tela deve ser "Entrar".
+    setMode('signin', { keepValue: true });
+    setMessage('', '');
+    subscribeToAuthEvents();
+
+    const resend = $('authResend');
+    if (resend) resend.hidden = true;
+    pendingEmail = '';
+
+    const password = $('authPassword');
+    if (password) password.value = '';
+
+    if (typeof callbacks.onSignedIn === 'function') {
+      // Mantém o bloqueio visível até os dados da conta serem carregados.
+      return Promise.resolve(callbacks.onSignedIn(session)).then(function () {
+        hideGate();
+      });
+    }
+
+    hideGate();
+    return Promise.resolve();
   }
 
   async function handleSubmit(event) {
@@ -174,49 +298,151 @@ window.ObservaEduAuth = (function () {
 
     setBusy(true);
     try {
+      if (mode === 'signup') {
+        const signup = await Supabase.signUp(email, password);
+        if (!signup.ok) {
+          setMessage(signup.error || 'Não foi possível criar a conta. Tente novamente.', 'error');
+          return;
+        }
+
+        if (signup.needsConfirmation) {
+          setMode('signin', { keepValue: true });
+          const emailInput = $('authEmail');
+          if (emailInput) emailInput.value = email;
+          showResend(email);
+          setMessage(
+            'Conta criada. Enviamos um link de confirmação para ' +
+              email +
+              '. Abra o link no mesmo navegador e depois entre com sua senha. ' +
+              'Se não encontrar o e-mail, verifique a caixa de spam.',
+            'success'
+          );
+          return;
+        }
+
+        await handleSignedIn(signup.session);
+        return;
+      }
+
       const login = await Supabase.signIn(email, password);
       if (!login.ok) {
         setMessage(login.error || 'Não foi possível entrar. Tente novamente.', 'error');
         return;
       }
 
-      const access = await Supabase.checkAccess();
-      if (!access.ok) {
-        await Supabase.signOut();
-        setMessage(access.error || 'Não foi possível verificar a autorização da conta.', 'error');
-        return;
-      }
-
-      if (!access.allowed) {
-        await Supabase.signOut();
-        setMessage(
-          'Esta conta foi autenticada, mas não está autorizada a usar o ObservaEdu. ' +
-            'Solicite ao responsável a inclusão na lista de usuários autorizados.',
-          'error'
-        );
-        return;
-      }
-
-      setMessage('', '');
-      subscribeToAuthEvents();
-
-      const passwordInput = $('authPassword');
-      if (passwordInput) passwordInput.value = '';
-
-      if (typeof callbacks.onSignedIn === 'function') {
-        // Mantém o bloqueio visível até os dados da conta serem carregados.
-        await callbacks.onSignedIn(login.session);
-      }
-
-      hideGate();
+      await handleSignedIn(login.session);
     } catch (error) {
       setGate(true);
       setMessage(
-        Supabase.friendlyError(error) || 'Não foi possível entrar. Tente novamente.',
+        Supabase.friendlyError(error) || 'Não foi possível concluir a operação. Tente novamente.',
         'error'
       );
     } finally {
       setBusy(false);
+    }
+  }
+
+  async function handleResend() {
+    if (busy) return;
+    const emailInput = $('authEmail');
+    const email = String((emailInput && emailInput.value) || pendingEmail || '').trim();
+
+    clearFieldErrors();
+    if (!email || !isValidEmail(email)) {
+      setFieldError('authEmail', 'authEmailError', 'Informe um e-mail válido para reenviar.');
+      setMessage('Revise o e-mail destacado para reenviar a confirmação.', 'error');
+      return;
+    }
+
+    setBusy(true);
+    setMessage('Reenviando e-mail de confirmação...', 'info');
+    try {
+      const result = await Supabase.resendConfirmation(email);
+      if (!result.ok) {
+        setMessage(result.error || 'Não foi possível reenviar a confirmação.', 'error');
+        return;
+      }
+      setMessage(
+        'Se houver uma conta pendente para ' + email + ', um novo link de confirmação foi enviado.',
+        'success'
+      );
+    } catch (error) {
+      setMessage(Supabase.friendlyError(error) || 'Não foi possível reenviar a confirmação.', 'error');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  // Erros de confirmação/recuperação podem voltar na URL. Lê, mostra uma
+  // mensagem clara e limpa os parâmetros para não reaparecerem no reload.
+  function cleanAuthUrl() {
+    try {
+      const url = new URL(window.location.href);
+      ['error', 'error_code', 'error_description', 'code', 'state'].forEach(function (key) {
+        url.searchParams.delete(key);
+      });
+      if (url.hash) {
+        const hash = new URLSearchParams(url.hash.replace(/^#/, ''));
+        [
+          'error',
+          'error_code',
+          'error_description',
+          'access_token',
+          'refresh_token',
+          'token_type',
+          'expires_in',
+          'type'
+        ].forEach(function (key) {
+          hash.delete(key);
+        });
+        const rest = hash.toString();
+        url.hash = rest ? '#' + rest : '';
+      }
+      window.history.replaceState(null, '', url.pathname + (url.search || '') + (url.hash || ''));
+    } catch (error) {
+      // Sem histórico disponível (file://, por exemplo): apenas ignora.
+    }
+  }
+
+  function translateRedirectError(text) {
+    const value = String(text || '').trim();
+    if (!value) return '';
+    if (/expired|invalid/i.test(value)) return 'o link expirou ou já foi utilizado.';
+    if (/access denied|not authorized|forbidden/i.test(value)) {
+      return 'o acesso foi negado pelo Supabase.';
+    }
+    return /[.!?]$/.test(value) ? value : value + '.';
+  }
+
+  function readRedirectError() {
+    let hashParams = null;
+    let queryParams = null;
+    try {
+      hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ''));
+      queryParams = new URLSearchParams(window.location.search.replace(/^\?/, ''));
+    } catch (error) {
+      return '';
+    }
+
+    const description =
+      hashParams.get('error_description') ||
+      queryParams.get('error_description') ||
+      hashParams.get('error') ||
+      queryParams.get('error') ||
+      '';
+
+    if (!description) return '';
+
+    cleanAuthUrl();
+    return translateRedirectError(description);
+  }
+
+  function hadConfirmationCode() {
+    try {
+      const params = new URLSearchParams(window.location.search.replace(/^\?/, ''));
+      return params.has('code') || /access_token=/.test(window.location.hash);
+    } catch (error) {
+      return false;
     }
   }
 
@@ -227,10 +453,22 @@ window.ObservaEduAuth = (function () {
     const form = $('authForm');
     if (form) form.addEventListener('submit', handleSubmit);
 
+    document.querySelectorAll('[data-auth-mode]').forEach(function (button) {
+      button.addEventListener('click', function () {
+        if (busy) return;
+        setMode(button.dataset.authMode);
+        const email = $('authEmail');
+        if (email && mode === 'signup') email.focus();
+      });
+    });
+
+    const resend = $('authResend');
+    if (resend) resend.addEventListener('click', handleResend);
+
     document.addEventListener('online', function () {
       const box = $('authMessage');
       if (box && !box.hidden && /conexão|internet/i.test(box.textContent || '')) {
-        setMessage('Conexão restabelecida. Tente entrar novamente.', 'info');
+        setMessage('Conexão restabelecida. Tente novamente.', 'info');
       }
     });
   }
@@ -258,6 +496,7 @@ window.ObservaEduAuth = (function () {
   async function init(options) {
     callbacks = Object.assign({ onSignedIn: null, onSignedOut: null }, options || {});
     wire();
+    setMode('signin', { keepValue: true });
 
     if (!isConfigured()) {
       setLoading(false);
@@ -269,40 +508,52 @@ window.ObservaEduAuth = (function () {
       };
     }
 
+    const redirectError = readRedirectError();
+    const confirmationReturn = hadConfirmationCode();
+
     setGate(true);
     setLoading(true);
     setMessage('Verificando sessão...', 'info');
 
     try {
       const session = await Supabase.getSession();
-      if (!session) {
+
+      if (session) {
         setLoading(false);
-        setMessage('Entre com a conta autorizada para acessar os registros.', 'info');
-        return { ok: false, mode: 'cloud', reason: 'no-session' };
+        subscribeToAuthEvents();
+        cleanAuthUrl();
+        hideGate();
+        return { ok: true, mode: 'cloud', session: session };
       }
 
-      const access = await Supabase.checkAccess();
-      if (!access.ok) {
-        setLoading(false);
-        setMessage(access.error || 'Não foi possível verificar a autorização da conta.', 'error');
-        return { ok: false, mode: 'cloud', reason: 'access-error' };
-      }
+      setLoading(false);
 
-      if (!access.allowed) {
-        await Supabase.signOut();
-        setLoading(false);
+      if (redirectError) {
         setMessage(
-          'A sessão existe, mas esta conta não está autorizada. ' +
-            'Solicite a inclusão na lista de usuários autorizados do ObservaEdu.',
+          'Não foi possível concluir a confirmação: ' +
+            redirectError +
+            ' Se o e-mail já estiver confirmado, entre com e-mail e senha.',
           'error'
         );
-        return { ok: false, mode: 'cloud', reason: 'not-authorized' };
+        return { ok: false, mode: 'cloud', reason: 'redirect-error' };
       }
 
-      subscribeToAuthEvents();
-      setLoading(false);
-      hideGate();
-      return { ok: true, mode: 'cloud', session: session };
+      if (confirmationReturn) {
+        // O código de confirmação já foi processado (ou falhou). Remove da URL
+        // para a mensagem não reaparecer a cada recarregamento.
+        cleanAuthUrl();
+        setMessage(
+          'O link de confirmação foi aberto, mas a sessão não pôde ser concluída neste navegador. ' +
+            'Se o e-mail já estiver confirmado, entre com e-mail e senha. ' +
+            'Se ainda não estiver, peça um novo link em “Reenviar e-mail de confirmação”.',
+          'warning'
+        );
+        showResend('');
+        return { ok: false, mode: 'cloud', reason: 'confirmation-pending' };
+      }
+
+      setMessage('Entre com sua conta ou crie uma nova para acessar os registros.', 'info');
+      return { ok: false, mode: 'cloud', reason: 'no-session' };
     } catch (error) {
       setLoading(false);
       setMessage(

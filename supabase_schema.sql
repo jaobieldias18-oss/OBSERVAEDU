@@ -1,5 +1,5 @@
 -- ============================================================================
--- ObservaEdu 1.1.0 — Esquema do Supabase (PostgreSQL)
+-- ObservaEdu 1.2.0 — Esquema do Supabase (PostgreSQL)
 -- ============================================================================
 -- IMPORTANTE
 -- 1. Revise este arquivo antes de executar.
@@ -13,9 +13,10 @@
 --       where table_schema = 'public'
 --       order by table_name;
 --    Se a estrutura for diferente, adapte o script manualmente em vez de
---    apagar dados.
--- 5. Depois de executar, crie a conta em Authentication > Users e autorize-a
---    na tabela observaedu_authorized_users (veja o fim do arquivo).
+--    apagar dados. Bancos criados na 1.1.0 podem usar
+--    supabase_signup_update.sql em vez deste arquivo.
+-- 5. O cadastro é público: não é preciso inserir contas manualmente em
+--    observaedu_authorized_users. Veja a seção 9.
 --
 -- MODELO DE DADOS
 -- - observaedu_observations: uma linha por observação.
@@ -25,15 +26,18 @@
 --   * colunas extras (status, professor, disciplina, turma, observation_date)
 --     são cópias consultáveis para filtros/índices. O app lê o payload.
 -- - observaedu_settings: uma linha por usuário com a identificação da escola.
--- - observaedu_authorized_users: lista explícita de contas autorizadas.
---   Sem linha nesta tabela, nenhuma política de dados libera acesso.
+-- - observaedu_authorized_users: tabela legada mantida apenas para não apagar
+--   dados. Ela NÃO concede acesso: as políticas usam somente auth.uid().
 -- ============================================================================
 
 begin;
 
 -- ----------------------------------------------------------------------------
--- 1. Lista de usuários autorizados (controle de acesso por conta)
+-- 1. Tabela legada de autorizados (não usada para autorização)
 -- ----------------------------------------------------------------------------
+-- Mantida para compatibilidade com bancos criados na versão 1.1.0. A partir
+-- da 1.2.0 o cadastro é público e o acesso é definido apenas por
+-- owner_id = auth.uid(). Nenhuma política é criada para esta tabela.
 create table if not exists public.observaedu_authorized_users (
   user_id uuid primary key references auth.users (id) on delete cascade,
   note text,
@@ -41,7 +45,7 @@ create table if not exists public.observaedu_authorized_users (
 );
 
 comment on table public.observaedu_authorized_users is
-  'Contas do Supabase Auth autorizadas a usar o ObservaEdu. Gerenciada pelo administrador no SQL Editor.';
+  'Tabela legada (v1.1.0). Nao concede acesso na v1.2.0; mantida apenas para preservar dados historicos.';
 
 -- ----------------------------------------------------------------------------
 -- 2. Observações
@@ -130,28 +134,11 @@ create trigger observaedu_settings_set_updated_at
   for each row execute function public.observaedu_set_updated_at();
 
 -- ----------------------------------------------------------------------------
--- 5. Função de autorização (security definer, sem expor a lista)
+-- 5. Autorização
 -- ----------------------------------------------------------------------------
--- Uma conta autenticada só acessa dados se estiver nesta lista. A função é
--- SECURITY DEFINER para que as políticas possam consultar a lista mesmo sem
--- conceder SELECT amplo sobre ela. O search_path fixo evita sequestro de nomes.
-create or replace function public.observaedu_is_authorized()
-returns boolean
-language sql
-stable
-security definer
-set search_path = public, pg_temp
-as $$
-  select exists (
-    select 1
-    from public.observaedu_authorized_users a
-    where a.user_id = (select auth.uid())
-  );
-$$;
-
-revoke all on function public.observaedu_is_authorized() from public;
-grant execute on function public.observaedu_is_authorized() to authenticated;
-
+-- A v1.2.0 não usa lista manual de usuários. Cada conta autenticada acessa
+-- somente as próprias linhas, porque todas as políticas exigem
+-- owner_id = auth.uid(). Não há papel de administrador no cliente.
 -- ----------------------------------------------------------------------------
 -- 6. Row Level Security
 -- ----------------------------------------------------------------------------
@@ -159,8 +146,8 @@ alter table public.observaedu_observations enable row level security;
 alter table public.observaedu_settings enable row level security;
 alter table public.observaedu_authorized_users enable row level security;
 
--- Observações: SELECT/INSERT/UPDATE/DELETE apenas do próprio dono E apenas
--- se a conta estiver na lista de autorizados. Não há USING (true).
+-- Observações: SELECT/INSERT/UPDATE/DELETE apenas do próprio dono.
+-- Não há USING (true) e não há dependência de lista de autorizados.
 drop policy if exists observaedu_observations_select_own
   on public.observaedu_observations;
 create policy observaedu_observations_select_own
@@ -169,7 +156,6 @@ create policy observaedu_observations_select_own
   to authenticated
   using (
     owner_id = (select auth.uid())
-    and public.observaedu_is_authorized()
   );
 
 drop policy if exists observaedu_observations_insert_own
@@ -180,7 +166,6 @@ create policy observaedu_observations_insert_own
   to authenticated
   with check (
     owner_id = (select auth.uid())
-    and public.observaedu_is_authorized()
   );
 
 drop policy if exists observaedu_observations_update_own
@@ -191,11 +176,9 @@ create policy observaedu_observations_update_own
   to authenticated
   using (
     owner_id = (select auth.uid())
-    and public.observaedu_is_authorized()
   )
   with check (
     owner_id = (select auth.uid())
-    and public.observaedu_is_authorized()
   );
 
 drop policy if exists observaedu_observations_delete_own
@@ -206,7 +189,6 @@ create policy observaedu_observations_delete_own
   to authenticated
   using (
     owner_id = (select auth.uid())
-    and public.observaedu_is_authorized()
   );
 
 -- Configurações: mesmas regras.
@@ -218,7 +200,6 @@ create policy observaedu_settings_select_own
   to authenticated
   using (
     owner_id = (select auth.uid())
-    and public.observaedu_is_authorized()
   );
 
 drop policy if exists observaedu_settings_insert_own
@@ -229,7 +210,6 @@ create policy observaedu_settings_insert_own
   to authenticated
   with check (
     owner_id = (select auth.uid())
-    and public.observaedu_is_authorized()
   );
 
 drop policy if exists observaedu_settings_update_own
@@ -240,11 +220,9 @@ create policy observaedu_settings_update_own
   to authenticated
   using (
     owner_id = (select auth.uid())
-    and public.observaedu_is_authorized()
   )
   with check (
     owner_id = (select auth.uid())
-    and public.observaedu_is_authorized()
   );
 
 drop policy if exists observaedu_settings_delete_own
@@ -255,20 +233,19 @@ create policy observaedu_settings_delete_own
   to authenticated
   using (
     owner_id = (select auth.uid())
-    and public.observaedu_is_authorized()
   );
 
--- Lista de autorizados: cada usuário autenticado pode ver somente a própria
--- linha (necessário para a checagem da interface). Não há políticas de
--- INSERT/UPDATE/DELETE para contas comuns: a lista é gerenciada pelo
--- administrador no SQL Editor / painel.
+-- Tabela legada de autorizados: RLS habilitada e SEM políticas. Sem política
+-- e sem privilégios, nenhuma conta comum lê ou escreve nela. A gestão, se
+-- necessária, é feita apenas no painel/SQL Editor do Supabase.
 drop policy if exists observaedu_authorized_select_self
   on public.observaedu_authorized_users;
-create policy observaedu_authorized_select_self
-  on public.observaedu_authorized_users
-  for select
-  to authenticated
-  using (user_id = (select auth.uid()));
+drop policy if exists observaedu_authorized_insert_self
+  on public.observaedu_authorized_users;
+drop policy if exists observaedu_authorized_update_self
+  on public.observaedu_authorized_users;
+drop policy if exists observaedu_authorized_delete_self
+  on public.observaedu_authorized_users;
 
 -- ----------------------------------------------------------------------------
 -- 7. Privilégios de tabela
@@ -288,7 +265,7 @@ grant select, insert, update, delete on table public.observaedu_settings
 
 revoke all on table public.observaedu_authorized_users from public;
 revoke all on table public.observaedu_authorized_users from anon;
-grant select on table public.observaedu_authorized_users to authenticated;
+revoke all on table public.observaedu_authorized_users from authenticated;
 
 commit;
 
@@ -307,23 +284,28 @@ commit;
 -- order by tablename, policyname;
 
 -- ============================================================================
--- 9. AUTORIZAÇÃO DA CONTA REAL (executar SOMENTE depois de criar o usuário)
+-- 9. CADASTRO PÚBLICO E CONTA DO RESPONSÁVEL
 -- ============================================================================
--- Não invente UUIDs. Crie a conta em Authentication > Users, copie o UUID
--- mostrado no painel e substitua o e-mail abaixo. O comando usa o e-mail
--- para localizar a conta e não cria usuários.
+-- A partir da v1.2.0 qualquer pessoa pode criar a própria conta pelo botão
+-- "Criar minha conta" na tela de entrada. Nenhuma linha precisa ser inserida
+-- em observaedu_authorized_users: o isolamento é feito por owner_id = auth.uid().
 --
--- insert into public.observaedu_authorized_users (user_id, note)
--- select id, 'Orientador(a) — conta principal'
--- from auth.users
--- where email = 'SUBSTITUA_PELO_EMAIL_DA_CONTA'
--- on conflict (user_id) do nothing;
+-- No painel do Supabase:
+--   1. Authentication > Sign In / Providers > Email: mantenha habilitado.
+--   2. Authentication > Settings: habilite "Allow new users to sign up".
+--   3. Authentication > URL Configuration: cadastre a Site URL e as
+--      Redirect URLs do ObservaEdu, por exemplo:
+--        http://localhost:8123/
+--        https://SEU_DOMINIO/
+--   4. Se "Confirm email" estiver habilitado, configure o SMTP para que os
+--      links de confirmação sejam entregues. Sem SMTP confiável, os e-mails
+--      podem ficar limitados pelo serviço padrão do Supabase.
 --
--- Para conceder acesso a outra pessoa posteriormente, repita o comando com
--- o e-mail correto. Para revogar, remova a linha correspondente:
+-- A conta do responsável pelo projeto é uma conta comum. Não existe botão,
+-- coluna ou metadata que conceda administração pelo navegador. Toda
+-- administração (banco, políticas, usuários) acontece no painel do Supabase.
 --
--- delete from public.observaedu_authorized_users
--- where user_id = (select id from auth.users where email = 'EMAIL_DA_CONTA');
---
--- Recomendado no painel: Authentication > Providers/Settings, desative
--- "Allow new users to sign up" para impedir cadastro público.
+-- Para inspecionar as contas cadastradas (somente no SQL Editor):
+--   select id, email, email_confirmed_at, created_at
+--   from auth.users
+--   order by created_at desc;

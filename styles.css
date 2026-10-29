@@ -4098,6 +4098,68 @@ body.auth-locked {
   font-size: 13px;
 }
 
+.auth-tabs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+  padding: 4px;
+  margin: 0 0 20px;
+  background: var(--slate-100);
+  border: 1px solid var(--border);
+  border-radius: 11px;
+}
+
+.auth-tab {
+  min-height: 38px;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--slate-600);
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.auth-tab:hover {
+  color: var(--slate-900);
+}
+
+.auth-tab.is-active {
+  background: var(--surface);
+  color: var(--blue-800);
+  box-shadow: var(--shadow-sm);
+}
+
+.auth-tab:focus-visible {
+  outline: 2px solid var(--blue-500);
+  outline-offset: 2px;
+}
+
+.auth-link {
+  align-self: center;
+  padding: 2px 4px;
+  border: 0;
+  background: transparent;
+  color: var(--blue-700);
+  font: inherit;
+  font-size: 11.5px;
+  font-weight: 700;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+
+.auth-link:hover {
+  color: var(--blue-900);
+}
+
+.auth-link:disabled {
+  color: var(--slate-400);
+  cursor: not-allowed;
+}
+
 .auth-loading {
   margin: 0 0 18px;
   padding: 12px 14px;
@@ -4186,6 +4248,12 @@ body.auth-locked {
   border-color: var(--blue-100);
   background: var(--blue-50);
   color: var(--blue-900);
+}
+
+.auth-message--success {
+  border-color: #bbf7d0;
+  background: var(--green-50);
+  color: var(--green-800);
 }
 
 .auth-submit {
