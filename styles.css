@@ -740,7 +740,8 @@ code {
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  padding: 0;
+  min-height: 24px;
+  padding: 2px 0;
   border: 0;
   background: transparent;
   color: var(--blue-700);
@@ -4139,7 +4140,8 @@ body.auth-locked {
 
 .auth-link {
   align-self: center;
-  padding: 2px 4px;
+  min-height: 24px;
+  padding: 4px;
   border: 0;
   background: transparent;
   color: var(--blue-700);
@@ -4393,8 +4395,6 @@ body.auth-locked {
   .auth-gate {
     display: none !important;
   }
-}
-
 
   @page {
     size: A4;

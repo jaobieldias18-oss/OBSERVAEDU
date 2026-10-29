@@ -103,6 +103,15 @@ window.ObservaEduSupabase = (function () {
       };
     }
 
+    if (!/^sb_publishable_[A-Za-z0-9_-]{8,}$/.test(KEY_VALUE)) {
+      return {
+        configured: false,
+        reason:
+          'A chave em supabase-config.js não está no formato de chave publicável ' +
+          '(sb_publishable_...). Cole a chave pública do projeto no lugar indicado e recarregue a página.'
+      };
+    }
+
     return { configured: true, reason: '' };
   }
 
@@ -187,8 +196,8 @@ window.ObservaEduSupabase = (function () {
     }
     if (/already registered|already exists|email_exists|user_already_exists/i.test(message)) {
       return (
-        'Já existe uma conta com este e-mail. Use "Entrar" ou solicite a redefinição de senha ' +
-        'ao responsável pelo projeto.'
+        'Já existe uma conta com este e-mail. Use "Entrar" ou clique em "Esqueci minha senha" ' +
+        'na tela de entrada para definir uma nova senha.'
       );
     }
     if (/weak.?password|password should be at least|password.*too short|passwords?.*characters/i.test(message)) {
@@ -232,7 +241,7 @@ window.ObservaEduSupabase = (function () {
     if (/relation .* does not exist|42P01|schema cache|does not exist/i.test(message)) {
       return (
         'A estrutura do banco ainda não foi criada ou está incompleta. ' +
-        'Execute supabase_schema.sql e, se o banco já existia, supabase_signup_update.sql.'
+        'Execute supabase_schema.sql e, se o banco já existia, supabase_public_signup_fix.sql.'
       );
     }
     if (/duplicate key|23505/i.test(message)) {
@@ -323,8 +332,8 @@ window.ObservaEduSupabase = (function () {
           ok: false,
           code: 'email_exists',
           error:
-            'Já existe uma conta com este e-mail. Use "Entrar" ou solicite a redefinição de senha ' +
-            'ao responsável pelo projeto.'
+            'Já existe uma conta com este e-mail. Use "Entrar" ou clique em "Esqueci minha senha" ' +
+            'na tela de entrada para definir uma nova senha.'
         };
       }
 
@@ -348,6 +357,36 @@ window.ObservaEduSupabase = (function () {
         options: { emailRedirectTo: redirectUrl() }
       });
       if (error) return { ok: false, error: friendlyError(error) };
+      return { ok: true };
+    } catch (error) {
+      return { ok: false, error: friendlyError(error) };
+    }
+  }
+
+  // Envia o link de recuperação. A resposta é genérica para não revelar se
+  // o e-mail existe (proteção contra enumeração de contas).
+  async function requestPasswordReset(email) {
+    try {
+      const supabase = getClient();
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: redirectUrl()
+      });
+      if (error) return { ok: false, error: friendlyError(error) };
+      return { ok: true };
+    } catch (error) {
+      return { ok: false, error: friendlyError(error) };
+    }
+  }
+
+  // Define a nova senha usando a sessão temporária criada pelo link.
+  async function updatePassword(password) {
+    try {
+      const supabase = getClient();
+      const { data, error } = await supabase.auth.updateUser({ password: password });
+      if (error) return { ok: false, error: friendlyError(error) };
+      if (!data || !data.user) {
+        return { ok: false, error: 'O servidor não confirmou a atualização da senha.' };
+      }
       return { ok: true };
     } catch (error) {
       return { ok: false, error: friendlyError(error) };
@@ -622,13 +661,22 @@ window.ObservaEduSupabase = (function () {
       const settings = await supabase
         .from(TABLES.settings)
         .delete()
-        .eq('owner_id', session.user.id);
+        .eq('owner_id', session.user.id)
+        .select('owner_id');
       if (settings.error) {
         return {
           ok: false,
           error:
             'As observações foram removidas, mas as configurações não. ' +
             friendlyError(settings.error)
+        };
+      }
+      if (!Array.isArray(settings.data)) {
+        return {
+          ok: false,
+          error:
+            'As observações foram removidas, mas o servidor não confirmou a exclusão das configurações. ' +
+            'Recarregue a página e verifique.'
         };
       }
 
@@ -721,6 +769,8 @@ window.ObservaEduSupabase = (function () {
     signIn: signIn,
     signUp: signUp,
     resendConfirmation: resendConfirmation,
+    requestPasswordReset: requestPasswordReset,
+    updatePassword: updatePassword,
     signOut: signOut,
     onAuthStateChange: onAuthStateChange,
     listObservations: listObservations,

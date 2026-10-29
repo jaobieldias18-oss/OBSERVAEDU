@@ -1,0 +1,7 @@
+# Dependências locais e sistema operacional
+node_modules/
+.DS_Store
+Thumbs.db
+
+# Artefatos, testes locais e traces de auditoria
+_audit/

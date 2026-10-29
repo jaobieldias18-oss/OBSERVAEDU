@@ -9,7 +9,7 @@
 
 window.OBSERVAEDU_CONFIG = {
   appName: 'ObservaEdu',
-  version: '1.2.0',
+  version: '1.2.1',
 
   // Chaves usadas no localStorage. Não altere sem necessidade:
   // mudar a chave faz o sistema "perder de vista" os dados antigos.

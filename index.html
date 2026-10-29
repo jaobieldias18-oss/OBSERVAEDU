@@ -17,15 +17,24 @@
   <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
   <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
   <link rel="apple-touch-icon" sizes="180x180" href="icons/apple-touch-icon-180.png">
-  <link rel="stylesheet" href="styles.css?v=1.2.0">
-  <script src="supabase-config.js?v=1.2.0"></script>
+  <link rel="stylesheet" href="styles.css?v=1.2.1">
+  <script src="vendor/supabase-js-2.118.0.js?v=1.2.1"></script>
+  <script src="supabase-config.js?v=1.2.1"></script>
+  <script src="supabase.js?v=1.2.1"></script>
   <script>
     // Bloqueia visualmente a área interna antes de o auth.js carregar quando
-    // houver uma chave pública configurada. Sem chave, o modo local continua.
+    // houver uma chave pública válida. Sem chave, o modo local continua.
+    // Usa a mesma validação do cliente (supabase.js) para não divergir.
     (function () {
-      var config = window.OBSERVAEDU_SUPABASE_CONFIG;
-      var key = config && typeof config.publishableKey === 'string' ? config.publishableKey.trim() : '';
-      if (key) document.documentElement.classList.add('auth-pending');
+      var api = window.ObservaEduSupabase;
+      var status = api && typeof api.configuration === 'function' ? api.configuration() : null;
+      if (status && status.configured) {
+        document.documentElement.classList.add('auth-pending');
+      } else {
+        // Modo local já no primeiro paint: o aviso é exibido antes do
+        // conteúdo para não deslocar o layout depois da inicialização.
+        document.documentElement.classList.add('local-mode');
+      }
     })();
   </script>
 </head>
@@ -194,7 +203,7 @@
         </div>
       </div>
 
-      <div class="auth-tabs" role="group" aria-label="Entrar ou criar conta">
+      <div class="auth-tabs" id="authTabs" role="group" aria-label="Entrar ou criar conta">
         <button class="auth-tab is-active" type="button" data-auth-mode="signin" aria-pressed="true">Entrar</button>
         <button class="auth-tab" type="button" data-auth-mode="signup" aria-pressed="false">Criar minha conta</button>
       </div>
@@ -224,8 +233,37 @@
           <span id="authSubmitLabel">Entrar</span>
         </button>
 
+        <button class="auth-link" id="authForgot" type="button">
+          Esqueci minha senha
+        </button>
+
         <button class="auth-link" id="authResend" type="button" hidden>
           Reenviar e-mail de confirmação
+        </button>
+      </form>
+
+      <form class="auth-form" id="authRecovery" novalidate hidden>
+        <div class="auth-field">
+          <label for="authNewPassword">Nova senha</label>
+          <input id="authNewPassword" name="new-password" type="password" autocomplete="new-password" required minlength="6" maxlength="72" aria-describedby="authNewPasswordError">
+          <p class="auth-field-error" id="authNewPasswordError" hidden></p>
+        </div>
+
+        <div class="auth-field">
+          <label for="authNewPasswordConfirm">Confirmar nova senha</label>
+          <input id="authNewPasswordConfirm" name="new-password-confirm" type="password" autocomplete="new-password" required minlength="6" maxlength="72" aria-describedby="authNewPasswordConfirmError">
+          <p class="auth-field-error" id="authNewPasswordConfirmError" hidden></p>
+        </div>
+
+        <div class="auth-message" id="authRecoveryMessage" role="alert" hidden></div>
+
+        <button class="btn btn-primary auth-submit" id="authRecoverySubmit" type="submit">
+          <svg class="icon" aria-hidden="true"><use href="#i-lock"></use></svg>
+          <span id="authRecoverySubmitLabel">Definir nova senha</span>
+        </button>
+
+        <button class="auth-link" id="authRecoveryCancel" type="button">
+          Voltar para entrar
         </button>
       </form>
 
@@ -341,7 +379,7 @@
             <svg class="icon" aria-hidden="true"><use href="#i-lock" id="dataModeIconUse"></use></svg>
             <span id="dataModeLabel">Dados locais</span>
           </span>
-          <button class="btn btn-primary" id="topbarNewButton" type="button" data-action="new-observation">
+          <button class="btn btn-primary" id="topbarNewButton" type="button" data-action="new-observation" aria-label="Nova observação">
             <svg class="icon" aria-hidden="true"><use href="#i-plus"></use></svg>
             <span>Nova observação</span>
           </button>
@@ -350,11 +388,30 @@
 
       <div class="app-banner" id="appBanner" role="alert" hidden>
         <svg class="icon" aria-hidden="true"><use href="#i-alert"></use></svg>
-        <p id="appBannerMessage"></p>
+        <p id="appBannerMessage">Modo local: os dados ficam apenas neste navegador e não são sincronizados com a nuvem.</p>
         <button class="icon-btn" type="button" id="bannerDismiss" aria-label="Fechar aviso">
           <svg class="icon" aria-hidden="true"><use href="#i-close"></use></svg>
         </button>
       </div>
+
+      <script>
+        // Em modo local o aviso completo já aparece no primeiro paint, com o
+        // mesmo texto que app.js usaria depois. Assim o conteúdo não salta
+        // quando a inicialização termina. Em modo nuvem o aviso continua
+        // oculto até haver uma mensagem real.
+        (function () {
+          if (!document.documentElement.classList.contains('local-mode')) return;
+          var banner = document.getElementById('appBanner');
+          var message = document.getElementById('appBannerMessage');
+          if (!banner || !message) return;
+          var api = window.ObservaEduSupabase;
+          var status = api && typeof api.configuration === 'function' ? api.configuration() : null;
+          message.textContent =
+            'Modo local: os dados ficam apenas neste navegador e não são sincronizados com a nuvem.' +
+            (status && status.reason ? ' ' + status.reason : '');
+          banner.hidden = false;
+        })();
+      </script>
 
       <main class="app-main" id="mainContent" tabindex="-1">
         <!-- ============================ PAINEL ============================ -->
@@ -382,7 +439,7 @@
               <span class="stat-icon"><svg class="icon" aria-hidden="true"><use href="#i-file"></use></svg></span>
               <span class="stat-label">Total de observações</span>
               <strong class="stat-value" id="statTotal">0</strong>
-              <span class="stat-hint">registros salvos neste navegador</span>
+              <span class="stat-hint" id="statHintRecords">registros salvos neste navegador</span>
             </button>
             <button class="stat-card stat-card--amber" type="button" data-action="open-history" data-status="rascunho">
               <span class="stat-icon"><svg class="icon" aria-hidden="true"><use href="#i-clock"></use></svg></span>
@@ -443,7 +500,7 @@
                 </div>
                 <div>
                   <h3 class="card-title" id="dataNoteTitle">Sobre os dados desta versão</h3>
-                  <p>Os registros ficam no <strong>armazenamento local deste navegador</strong>. Eles não são enviados a servidores nem compartilhados com outros computadores.</p>
+                  <p id="dataNoteText">Os registros ficam no <strong>armazenamento local deste navegador</strong>. Eles não são enviados a servidores nem compartilhados com outros computadores.</p>
                   <p>Use a exportação de backup em Configurações para guardar uma cópia.</p>
                   <button class="link-button" type="button" data-action="nav" data-view="settings">Abrir configurações</button>
                 </div>
@@ -664,7 +721,7 @@
             <div>
               <p class="eyebrow">Consulta</p>
               <h2 class="page-title" id="historyTitle">Histórico de observações</h2>
-              <p class="page-description">Pesquise, filtre, abra e edite os registros salvos neste navegador.</p>
+              <p class="page-description" id="historyDescription">Pesquise, filtre, abra e edite os registros salvos neste navegador.</p>
             </div>
             <div class="heading-actions">
               <button class="btn btn-primary" type="button" data-action="new-observation">
@@ -786,7 +843,7 @@
             <div>
               <p class="eyebrow">Gestão</p>
               <h2 class="page-title" id="settingsTitle">Configurações</h2>
-              <p class="page-description">Identificação da escola, backup e informações sobre o armazenamento local.</p>
+              <p class="page-description" id="settingsDescription">Identificação da escola, backup e informações sobre o armazenamento local.</p>
             </div>
           </div>
 
@@ -929,7 +986,7 @@
                 <li><strong>iPhone e iPad (Safari):</strong> toque em <em>Compartilhar</em> e depois em <em>Adicionar à Tela de Início</em>. Outros navegadores no iOS podem não oferecer essa opção.</li>
                 <li><strong>Computador (Chrome ou Edge):</strong> use o ícone de instalação na barra de endereço ou o menu do navegador.</li>
                 <li><strong>Offline:</strong> funciona somente depois que o site já tiver sido aberto e armazenado em cache neste navegador. A primeira visita ainda precisa de internet.</li>
-                <li><strong>Atualizações:</strong> quando houver uma nova versão, o sistema avisa. Atualizar não apaga os registros salvos no <code>localStorage</code>.</li>
+                <li id="pwaStorageItem"><strong>Atualizações:</strong> quando houver uma nova versão, o sistema avisa. Atualizar não apaga os registros salvos no <code>localStorage</code>.</li>
                 <li><strong>Segurança:</strong> <span id="pwaSecurityItem">O PWA não oferece login, autenticação nem proteção institucional. Qualquer pessoa com acesso a este navegador pode consultar os dados locais.</span></li>
               </ul>
               <div class="settings-button-row">
@@ -977,7 +1034,7 @@
       </main>
 
       <footer class="app-footer no-print">
-        <p id="appFooterText">ObservaEdu · Versão 1.2.0 · Dados salvos apenas neste navegador.</p>
+        <p id="appFooterText">ObservaEdu · Versão 1.2.1 · Dados salvos apenas neste navegador.</p>
         <button class="link-button" type="button" data-action="open-help">Como usar o sistema</button>
       </footer>
     </div>
@@ -1038,15 +1095,14 @@
 
   <div class="toast-container" id="toastContainer" aria-live="polite" aria-atomic="false"></div>
 
-  <!-- Ordem importante: configuração (head) → cliente Supabase → armazenamento →
-       análise → relatório → autenticação → interface -->
-  <script src="questions.js?v=1.2.0"></script>
-  <script src="vendor/supabase-js-2.118.0.js?v=1.2.0"></script>
-  <script src="supabase.js?v=1.2.0"></script>
-  <script src="storage.js?v=1.2.0"></script>
-  <script src="analysis.js?v=1.2.0"></script>
-  <script src="report.js?v=1.2.0"></script>
-  <script src="auth.js?v=1.2.0"></script>
-  <script src="app.js?v=1.2.0"></script>
+  <!-- Ordem dos scripts:
+       No <head>: biblioteca vendor -> supabase-config.js -> supabase.js (permite validação imediata da chave).
+       No body: questions -> storage -> analysis -> report -> auth -> app. -->
+  <script src="questions.js?v=1.2.1"></script>
+  <script src="storage.js?v=1.2.1"></script>
+  <script src="analysis.js?v=1.2.1"></script>
+  <script src="report.js?v=1.2.1"></script>
+  <script src="auth.js?v=1.2.1"></script>
+  <script src="app.js?v=1.2.1"></script>
 </body>
 </html>

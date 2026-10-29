@@ -1,15 +1,16 @@
-# ObservaEdu 1.2.0 — Supabase com cadastro público
+# ObservaEdu 1.2.1 — Supabase com cadastro público
 
-Este documento descreve a autenticação da versão 1.2.0, o que já foi testado,
+Este documento descreve a autenticação da versão 1.2.1, o que já foi testado,
 o que depende de configuração no painel do Supabase e como operar com
 segurança. O aplicativo continua em HTML/CSS/JavaScript puro, sem build,
 sem React/Next.js e sem servidor próprio.
 
 > **Situação atual:** `supabase-config.js` está com `publishableKey: ''`.
 > Portanto o ObservaEdu abre em **modo local** (`localStorage`), sem tela de
-> entrada. Nenhum SQL foi executado por esta integração e nenhum teste real
-> contra o Supabase foi rodado. Os testes de cadastro/login/RLS reais
-> continuam pendentes até você configurar a chave e o painel.
+> entrada, e mostra um aviso explícito de que os dados não são sincronizados.
+> Nenhum SQL foi executado por esta integração e nenhum teste real contra o
+> Supabase foi rodado. Os testes de cadastro/login/RLS reais continuam
+> pendentes até você configurar a chave e o painel.
 
 ---
 
@@ -44,10 +45,13 @@ foram alterados em comportamento.
 ### 2.1 Ordem de carregamento
 
 ```
-supabase-config.js (head)
-  → questions.js
-  → vendor/supabase-js-2.118.0.js
+<head>:
+  vendor/supabase-js-2.118.0.js
+  → supabase-config.js
   → supabase.js
+
+<body>:
+  questions.js
   → storage.js
   → analysis.js
   → report.js
@@ -65,7 +69,8 @@ supabase-config.js (head)
 | `storage.js` | Fachada local/nuvem; APIs locais de backup preservadas. |
 | `app.js` | Persistência assíncrona, confirmação de gravação no servidor, migração, exclusão, configurações. |
 | `supabase_schema.sql` | Esquema completo para instalações novas (já no modelo 1.2.0). |
-| `supabase_signup_update.sql` | Atualização incremental para bancos criados pela 1.1.0. |
+| `supabase_public_signup_fix.sql` | Correção incremental para bancos criados pela 1.1.0 (versão recomendada). |
+| `supabase_signup_update.sql` | Versão anterior da mesma correção; mantida por histórico, não precisa ser executada. |
 | `service-worker.js` | Cache apenas da interface; não intercepta API do Supabase. |
 
 ---
@@ -161,18 +166,22 @@ window.OBSERVAEDU_SUPABASE_CONFIG = {
 
 ### 5.2 Banco criado pela 1.1.0 (seu caso)
 
-Execute **apenas** `supabase_signup_update.sql`:
+Execute **apenas** `supabase_public_signup_fix.sql`:
 
 1. Revise o arquivo.
 2. Ctrl+A → Run.
 3. Ele recria as 8 políticas de dados sem a lista de autorizados, mantém a
    RLS ligada, remove o acesso do cliente à tabela legada e **não** apaga
-   tabelas nem registros.
+   tabelas nem registros. Antes de remover a função legada, verifica
+   dependências e desfaz tudo se encontrar algo inesperado.
 
-> Não execute `supabase_schema.sql` e `supabase_signup_update.sql` “ao mesmo
-> tempo” sem revisar: em banco novo, o schema já contém o modelo final; o
-> update é para bancos antigos. Rodar os dois em sequência também é seguro
-> (as políticas são recriadas com os mesmos nomes), mas é redundante.
+> `supabase_signup_update.sql` é uma versão anterior da mesma correção.
+> Não é necessário executar os dois arquivos; use o `public_signup_fix`.
+>
+> Não execute `supabase_schema.sql` e o fix “ao mesmo tempo” sem revisar:
+> em banco novo, o schema já contém o modelo final; o fix é para bancos
+> antigos. Rodar os dois em sequência também é seguro (as políticas são
+> recriadas com os mesmos nomes), mas é redundante.
 
 ### 5.3 Verificação
 
@@ -220,6 +229,9 @@ Esperado:
      `emailRedirectTo` igual a `origem + caminho` da página aberta; se essa
      URL não estiver na lista, o link de confirmação cai na Site URL padrão
      e pode não voltar para o app.
+   - A mesma lista é usada pelo link de **recuperação de senha**
+     (`resetPasswordForEmail`). Se o link de recuperação cair na Site URL
+     errada, a tela “Definir nova senha” não abre.
    - Em GitHub Pages, o caminho costuma ser `/nome-do-repositorio/`.
 4. **SMTP (recomendado)**
    - Authentication → Emails/SMTP: configure um provedor próprio.
@@ -282,6 +294,25 @@ para a mensagem não reaparecer ao recarregar.
 Aparece após um cadastro pendente. Valida o e-mail e chama
 `supabase.auth.resend({ type: 'signup' })`. A mensagem é neutra para não
 revelar se o endereço existe.
+
+### 7.4 Recuperar senha
+
+1. Na tela **Entrar**, clique em **Esqueci minha senha**.
+2. Informe o e-mail e confirme. A mensagem é neutra: “se existir uma conta
+   para este e-mail, enviamos um link”.
+3. O link do Supabase abre o ObservaEdu com `?code=...` (PKCE). O cliente
+   detecta `PASSWORD_RECOVERY` e troca a tela para **Definir nova senha**.
+4. Informe a nova senha (mínimo 6, máximo 72) e a confirmação. O app chama
+   `supabase.auth.updateUser({ password })`; a mensagem de sucesso só aparece
+   depois da resposta do servidor.
+5. A sessão temporária é encerrada e a tela **Entrar** é exibida novamente.
+
+O link precisa ser aberto **no mesmo navegador** em que foi solicitado, por
+causa do verificador PKCE. Em outro dispositivo, o link não conclui; solicite
+outro na mesma máquina. Para o e-mail chegar, configure SMTP ou use o serviço
+de e-mail padrão do Supabase em **Authentication → Emails**.
+Adicione também a URL publicada em **Authentication → URL Configuration →
+Redirect URLs** (veja a seção 6).
 
 ---
 
@@ -411,10 +442,11 @@ conta”; e ausência de chaves secretas no frontend.
 
 Estes **não foram executados** e não devem ser considerados aprovados:
 
-- execução de `supabase_signup_update.sql` no banco real;
+- execução de `supabase_public_signup_fix.sql` no banco real;
 - conferência das políticas RLS no painel;
 - cadastro real de um usuário novo;
 - confirmação de e-mail real (link, expiração, reenvio, SMTP);
+- recuperação de senha real (envio do e-mail, link PKCE e `updateUser`);
 - login, restauração de sessão e logout reais;
 - dois usuários distintos, comprovando isolamento de leitura/escrita;
 - tentativas de leitura, edição e exclusão do registro de outro usuário;
@@ -427,8 +459,9 @@ Estes **não foram executados** e não devem ser considerados aprovados:
 
 ## 13. Limitações conhecidas
 
-- Não há recuperação de senha na interface; use o painel do Supabase ou
-  configure o fluxo de recuperação futuramente.
+- A recuperação de senha depende do envio de e-mail do Supabase (SMTP ou
+  serviço padrão) e de a URL publicada estar em Redirect URLs; o link PKCE
+  precisa ser aberto no mesmo navegador em que foi solicitado.
 - Não há MFA, papéis, convites, auditoria ou compartilhamento institucional.
 - Cadastro público depende de rate limit/CAPTCHA do Supabase; não há
   verificação de vínculo institucional.
@@ -449,22 +482,23 @@ Estes **não foram executados** e não devem ser considerados aprovados:
 | Mensagem/situação | Causa provável | Ação |
 | --- | --- | --- |
 | “A chave pública ainda não foi configurada…” | `publishableKey` vazia | Colar a chave e recarregar. |
+| “A chave em supabase-config.js não está no formato de chave publicável…” | Chave antiga/`anon` ou valor inválido | Colar a chave `sb_publishable_...` em Project Settings → API Keys. |
 | “A chave configurada parece ser administrativa…” | Chave secreta | Remover e rotacionar no Supabase. |
 | “O cadastro público está desativado…” | Signup desabilitado | Authentication → habilitar “Allow new users to sign up”. |
-| “Já existe uma conta com este e-mail.” | E-mail cadastrado | Usar “Entrar” ou redefinir senha no painel. |
+| “Já existe uma conta com este e-mail.” | E-mail cadastrado | Usar “Entrar” ou “Esqueci minha senha”. |
 | “Conta criada, confirme o e-mail” mas nada chega | SMTP/limite de envio | Configurar SMTP e usar “Reenviar”; verificar spam. |
 | “Não foi possível concluir a confirmação…” | Link expirado ou aberto em outro navegador | Reenviar ou simplesmente entrar com e-mail e senha. |
 | “E-mail ou senha incorretos.” | Credenciais inválidas | Conferir dados. |
 | “O e-mail desta conta ainda não foi confirmado.” | Confirmação pendente | Abrir o link ou reenviar. |
 | `42P01 relation ... does not exist` | SQL não aplicado | Executar o arquivo correto inteiro (Ctrl+A → Run). |
-| Erro de permissão ao gravar | RLS/grants | Conferir `supabase_signup_update.sql` e as políticas. |
+| Erro de permissão ao gravar | RLS/grants | Conferir `supabase_public_signup_fix.sql` e as políticas. |
 | “Gravação não confirmada” | Rede/RLS | Manter o formulário, exportar backup e tentar de novo. |
 
 ---
 
 ## 15. Checklist manual no painel
 
-1. [ ] Executar `supabase_signup_update.sql` (banco da 1.1.0) ou
+1. [ ] Executar `supabase_public_signup_fix.sql` (banco da 1.1.0) ou
        `supabase_schema.sql` (banco novo), inteiro.
 2. [ ] Conferir `rowsecurity = true` e as 8 políticas por `auth.uid()`.
 3. [ ] Habilitar “Allow new users to sign up”.

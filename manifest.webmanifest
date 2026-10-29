@@ -2,7 +2,7 @@
   "id": "./",
   "name": "ObservaEdu — Observação Pedagógica",
   "short_name": "ObservaEdu",
-  "description": "Registro, análise por regras e relatório de observações pedagógicas, com dados salvos localmente no navegador.",
+  "description": "Registro, análise por regras e relatório de observações pedagógicas, com dados no dispositivo ou na conta Supabase.",
   "lang": "pt-BR",
   "dir": "ltr",
   "start_url": "./",

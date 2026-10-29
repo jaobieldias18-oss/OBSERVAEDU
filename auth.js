@@ -28,6 +28,7 @@ window.ObservaEduAuth = (function () {
   let manualSignOut = false;
   let subscribed = false;
   let mode = 'signin'; // 'signin' | 'signup'
+  let recovery = false;
   let pendingEmail = '';
 
   function $(id) {
@@ -68,7 +69,13 @@ window.ObservaEduAuth = (function () {
       window.setTimeout(function () {
         const email = $('authEmail');
         const form = $('authForm');
-        if (email && form && !form.hidden) email.focus();
+        const recoveryForm = $('authRecovery');
+        const newPassword = $('authNewPassword');
+        if (recovery && newPassword && recoveryForm && !recoveryForm.hidden) {
+          newPassword.focus();
+        } else if (email && form && !form.hidden) {
+          email.focus();
+        }
       }, 60);
     }
   }
@@ -77,23 +84,25 @@ window.ObservaEduAuth = (function () {
     const form = $('authForm');
     const loadingBox = $('authLoading');
     const submit = $('authSubmit');
-    if (form) form.hidden = !!loading;
+    if (form) form.hidden = !!loading || recovery;
     if (loadingBox) loadingBox.hidden = !loading;
     if (submit) submit.disabled = !!loading || busy;
   }
 
   function setMessage(text, tone) {
-    const box = $('authMessage');
-    if (!box) return;
-    if (!text) {
-      box.hidden = true;
-      box.textContent = '';
-      box.className = 'auth-message';
-      return;
-    }
-    box.hidden = false;
-    box.textContent = text;
-    box.className = 'auth-message auth-message--' + (tone || 'error');
+    ['authMessage', 'authRecoveryMessage'].forEach(function (id) {
+      const box = $(id);
+      if (!box) return;
+      if (!text) {
+        box.hidden = true;
+        box.textContent = '';
+        box.className = 'auth-message';
+        return;
+      }
+      box.hidden = false;
+      box.textContent = text;
+      box.className = 'auth-message auth-message--' + (tone || 'error');
+    });
   }
 
   function clearFieldErrors() {
@@ -180,10 +189,18 @@ window.ObservaEduAuth = (function () {
     const submit = $('authSubmit');
     const label = $('authSubmitLabel');
     const resend = $('authResend');
+    const forgot = $('authForgot');
     const form = $('authForm');
+    const recoverySubmit = $('authRecoverySubmit');
+    const recoveryLabel = $('authRecoverySubmitLabel');
     if (label) label.textContent = submitLabel();
     if (submit) submit.disabled = busy;
     if (resend) resend.disabled = busy;
+    if (forgot) forgot.disabled = busy;
+    if (recoverySubmit) recoverySubmit.disabled = busy;
+    if (recoveryLabel) {
+      recoveryLabel.textContent = busy ? 'Salvando senha...' : 'Definir nova senha';
+    }
     if (form) form.setAttribute('aria-busy', busy ? 'true' : 'false');
   }
 
@@ -203,6 +220,7 @@ window.ObservaEduAuth = (function () {
     const password = $('authPassword');
     const passwordError = $('authPasswordError');
     const resend = $('authResend');
+    const forgot = $('authForgot');
 
     if (title) {
       title.textContent =
@@ -233,6 +251,7 @@ window.ObservaEduAuth = (function () {
       passwordError.textContent = '';
     }
     if (resend) resend.hidden = true;
+    if (forgot) forgot.hidden = mode !== 'signin';
 
     if (!opts.keepEmail) {
       const email = $('authEmail');
@@ -243,6 +262,103 @@ window.ObservaEduAuth = (function () {
     clearFieldErrors();
     setMessage('', '');
     setBusy(busy); // atualiza o rótulo do botão sem mudar o estado ocupado
+  }
+
+  function clearRecoveryErrors() {
+    ['authNewPassword', 'authNewPasswordConfirm'].forEach(function (id) {
+      const field = $(id);
+      if (field) field.removeAttribute('aria-invalid');
+    });
+    ['authNewPasswordError', 'authNewPasswordConfirmError'].forEach(function (id) {
+      const box = $(id);
+      if (box) {
+        box.hidden = true;
+        box.textContent = '';
+      }
+    });
+  }
+
+  function validateRecovery(password, confirmation) {
+    clearRecoveryErrors();
+    let valid = true;
+
+    if (!password) {
+      setFieldError('authNewPassword', 'authNewPasswordError', 'Crie uma nova senha.');
+      valid = false;
+    } else if (password.length < MIN_PASSWORD) {
+      setFieldError(
+        'authNewPassword',
+        'authNewPasswordError',
+        'A senha deve ter pelo menos ' + MIN_PASSWORD + ' caracteres.'
+      );
+      valid = false;
+    } else if (password.length > MAX_PASSWORD) {
+      setFieldError(
+        'authNewPassword',
+        'authNewPasswordError',
+        'A senha deve ter no máximo ' + MAX_PASSWORD + ' caracteres.'
+      );
+      valid = false;
+    }
+
+    if (confirmation !== password) {
+      setFieldError(
+        'authNewPasswordConfirm',
+        'authNewPasswordConfirmError',
+        'A confirmação precisa ser igual à nova senha.'
+      );
+      valid = false;
+    }
+
+    if (!valid) {
+      setMessage('Revise os campos destacados para definir a nova senha.', 'error');
+    }
+    return valid;
+  }
+
+  function setRecovery(active) {
+    recovery = !!active;
+    const tabs = $('authTabs');
+    const form = $('authForm');
+    const recoveryForm = $('authRecovery');
+    const help = $('authHelp');
+    const resend = $('authResend');
+    const forgot = $('authForgot');
+    const loadingBox = $('authLoading');
+    const title = $('authTitle');
+    const subtitle = $('authSubtitle');
+
+    if (tabs) tabs.hidden = recovery;
+    if (form) form.hidden = recovery;
+    if (recoveryForm) recoveryForm.hidden = !recovery;
+    if (help) help.hidden = recovery;
+    if (resend && recovery) resend.hidden = true;
+    if (forgot && recovery) forgot.hidden = true;
+    if (loadingBox && recovery) loadingBox.hidden = true;
+
+    if (recovery) {
+      if (title) title.textContent = 'Definir nova senha';
+      if (subtitle) {
+        subtitle.textContent =
+          'Você abriu um link de recuperação. Escolha uma nova senha para acessar sua conta.';
+      }
+      ['authNewPassword', 'authNewPasswordConfirm'].forEach(function (id) {
+        const field = $(id);
+        if (field) field.value = '';
+      });
+      clearRecoveryErrors();
+      setMessage('Defina uma nova senha com pelo menos ' + MIN_PASSWORD + ' caracteres.', 'info');
+      const first = $('authNewPassword');
+      if (first) {
+        window.setTimeout(function () {
+          first.focus();
+        }, 60);
+      }
+    } else {
+      clearRecoveryErrors();
+      setMode('signin', { keepValue: true });
+      setMessage('', '');
+    }
   }
 
   function showGate(message, tone) {
@@ -373,6 +489,84 @@ window.ObservaEduAuth = (function () {
     }
   }
 
+  async function handleForgot() {
+    if (busy) return;
+    const email = String(($('authEmail') && $('authEmail').value) || '').trim();
+
+    clearFieldErrors();
+    if (!email || !isValidEmail(email)) {
+      setFieldError('authEmail', 'authEmailError', 'Informe o e-mail da conta para recuperar a senha.');
+      setMessage('Revise o e-mail destacado para recuperar a senha.', 'error');
+      const emailInput = $('authEmail');
+      if (emailInput) emailInput.focus();
+      return;
+    }
+
+    setBusy(true);
+    setMessage('Enviando link de recuperação...', 'info');
+    try {
+      const result = await Supabase.requestPasswordReset(email);
+      if (!result.ok) {
+        setMessage(result.error || 'Não foi possível enviar o link de recuperação.', 'error');
+        return;
+      }
+      setMessage(
+        'Se existir uma conta para ' +
+          email +
+          ', enviamos um link para definir uma nova senha. ' +
+          'Abra o link no mesmo navegador. Se não encontrar o e-mail, verifique a caixa de spam.',
+        'success'
+      );
+    } catch (error) {
+      setMessage(
+        Supabase.friendlyError(error) || 'Não foi possível enviar o link de recuperação.',
+        'error'
+      );
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleRecoverySubmit(event) {
+    event.preventDefault();
+    if (busy) return;
+
+    const password = String(($('authNewPassword') && $('authNewPassword').value) || '');
+    const confirmation = String(
+      ($('authNewPasswordConfirm') && $('authNewPasswordConfirm').value) || ''
+    );
+    setMessage('', '');
+
+    if (!validateRecovery(password, confirmation)) return;
+
+    setBusy(true);
+    setMessage('Atualizando senha...', 'info');
+    try {
+      const result = await Supabase.updatePassword(password);
+      if (!result.ok) {
+        setMessage(result.error || 'Não foi possível atualizar a senha.', 'error');
+        return;
+      }
+
+      const signOutResult = await logout();
+      setRecovery(false);
+      setMode('signin', { keepValue: true });
+      setMessage(
+        signOutResult.ok
+          ? 'Senha atualizada com sucesso. Entre com a nova senha.'
+          : 'Senha atualizada. Não foi possível encerrar a sessão anterior; recarregue a página e entre novamente.',
+        signOutResult.ok ? 'success' : 'warning'
+      );
+    } catch (error) {
+      setMessage(
+        Supabase.friendlyError(error) || 'Não foi possível atualizar a senha. Tente novamente.',
+        'error'
+      );
+    } finally {
+      setBusy(false);
+    }
+  }
+
   // Erros de confirmação/recuperação podem voltar na URL. Lê, mostra uma
   // mensagem clara e limpa os parâmetros para não reaparecerem no reload.
   function cleanAuthUrl() {
@@ -453,14 +647,29 @@ window.ObservaEduAuth = (function () {
     const form = $('authForm');
     if (form) form.addEventListener('submit', handleSubmit);
 
+    const recoveryForm = $('authRecovery');
+    if (recoveryForm) recoveryForm.addEventListener('submit', handleRecoverySubmit);
+
+    const recoveryCancel = $('authRecoveryCancel');
+    if (recoveryCancel) {
+      recoveryCancel.addEventListener('click', function () {
+        if (busy) return;
+        setRecovery(false);
+      });
+    }
+
     document.querySelectorAll('[data-auth-mode]').forEach(function (button) {
       button.addEventListener('click', function () {
-        if (busy) return;
-        setMode(button.dataset.authMode);
+        if (busy || recovery) return;
+        // Mantém o que já foi digitado ao alternar entre Entrar e Criar conta.
+        setMode(button.dataset.authMode, { keepValue: true, keepPassword: true });
         const email = $('authEmail');
         if (email && mode === 'signup') email.focus();
       });
     });
+
+    const forgot = $('authForgot');
+    if (forgot) forgot.addEventListener('click', handleForgot);
 
     const resend = $('authResend');
     if (resend) resend.addEventListener('click', handleResend);
@@ -479,11 +688,24 @@ window.ObservaEduAuth = (function () {
 
     try {
       Supabase.onAuthStateChange(function (event) {
+        if (event === 'PASSWORD_RECOVERY') {
+          // O link de recuperação abre uma sessão temporária. Fora do
+          // callback síncrono do Supabase, troca a tela para definir a senha.
+          recovery = true;
+          window.setTimeout(function () {
+            setGate(true);
+            setLoading(false);
+            setRecovery(true);
+          }, 0);
+          return;
+        }
+
         if (event !== 'SIGNED_OUT' || manualSignOut) return;
 
         // Fora do callback síncrono do Supabase: limpa a interface e
         // volta ao bloqueio de login quando a sessão expira ou é revogada.
         window.setTimeout(function () {
+          setRecovery(false);
           showGate('Sua sessão terminou. Entre novamente para acessar os registros.', 'warning');
           if (typeof callbacks.onSignedOut === 'function') callbacks.onSignedOut();
         }, 0);
@@ -511,6 +733,9 @@ window.ObservaEduAuth = (function () {
     const redirectError = readRedirectError();
     const confirmationReturn = hadConfirmationCode();
 
+    // Assina antes de getSession(): o evento PASSWORD_RECOVERY é emitido
+    // durante a inicialização do cliente, ao processar o link do e-mail.
+    subscribeToAuthEvents();
     setGate(true);
     setLoading(true);
     setMessage('Verificando sessão...', 'info');
@@ -519,9 +744,29 @@ window.ObservaEduAuth = (function () {
       const session = await Supabase.getSession();
 
       if (session) {
-        setLoading(false);
-        subscribeToAuthEvents();
         cleanAuthUrl();
+
+        if (recovery) {
+          setLoading(false);
+          return { ok: false, mode: 'cloud', reason: 'recovery', session: session };
+        }
+
+        if (typeof callbacks.onSignedIn === 'function') {
+          try {
+            await Promise.resolve(callbacks.onSignedIn(session));
+          } catch (error) {
+            setLoading(false);
+            setMessage(
+              Supabase.friendlyError(error) ||
+                'A sessão foi reconhecida, mas não foi possível carregar os dados da conta.',
+              'error'
+            );
+            return { ok: false, mode: 'cloud', reason: 'load-error', session: session };
+          }
+        }
+
+        setLoading(false);
+        if (recovery) return { ok: false, mode: 'cloud', reason: 'recovery', session: session };
         hideGate();
         return { ok: true, mode: 'cloud', session: session };
       }

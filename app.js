@@ -3,8 +3,8 @@
  * -------------------------------------------
  * Este arquivo liga o formulário, o armazenamento (local ou Supabase),
  * a análise por regras e o relatório. A ordem de carregamento dos scripts é:
- * questions.js -> supabase.js -> storage.js -> analysis.js -> report.js ->
- * auth.js -> app.js.
+ * No head: vendor/supabase-js -> supabase-config.js -> supabase.js.
+ * No body: questions.js -> storage.js -> analysis.js -> report.js -> auth.js -> app.js.
  *
  * Organização do código:
  * 1. Utilidades e estado
@@ -973,10 +973,43 @@
         ? 'Os registros são armazenados no Supabase e protegidos por login e RLS. O cache offline guarda apenas a interface. Exporte backups e encerre a sessão em computadores compartilhados.'
         : 'Os dados desta versão ficam no armazenamento local deste navegador. Faça backup em Configurações e não use o sistema como único repositório institucional. O PWA não oferece login nem proteção institucional.'
     );
+
+    setText(
+      'dataNoteTitle',
+      cloud ? 'Sobre os dados da sua conta' : 'Sobre os dados desta versão'
+    );
+    setText(
+      'statHintRecords',
+      cloud ? 'registros na sua conta' : 'registros salvos neste navegador'
+    );
+    setText(
+      'dataNoteText',
+      cloud
+        ? 'Os registros ficam na sua conta no Supabase, protegidos por login e pelas políticas RLS. Eles não são compartilhados com outras contas.'
+        : 'Os registros ficam no armazenamento local deste navegador. Eles não são enviados a servidores nem compartilhados com outros computadores.'
+    );
+    setText(
+      'historyDescription',
+      cloud
+        ? 'Pesquise, filtre, abra e edite os registros da sua conta no Supabase.'
+        : 'Pesquise, filtre, abra e edite os registros salvos neste navegador.'
+    );
+    setText(
+      'settingsDescription',
+      cloud
+        ? 'Identificação da escola, conta, nuvem, backup e informações sobre o armazenamento.'
+        : 'Identificação da escola, backup e informações sobre o armazenamento local.'
+    );
+    setText(
+      'pwaStorageItem',
+      cloud
+        ? 'Atualizações: quando houver uma nova versão, o sistema avisa. Atualizar não apaga a sessão nem os registros da sua conta no Supabase.'
+        : 'Atualizações: quando houver uma nova versão, o sistema avisa. Atualizar não apaga os registros salvos no localStorage.'
+    );
     setText(
       'futureText',
       cloud
-        ? 'A versão 1.2.0 usa Supabase Auth (com cadastro público) e PostgreSQL com Row Level Security. A análise ' +
+        ? 'A versão 1.2.1 usa Supabase Auth (com cadastro público) e PostgreSQL com Row Level Security. A análise ' +
             'continua baseada em regras explícitas de JavaScript e exige revisão humana. ' +
             'Não há sincronização offline fictícia nem integração com IA.'
         : 'Esta versão foi organizada em camadas simples (configuração, armazenamento, análise, ' +
@@ -989,7 +1022,7 @@
     if (footer) {
       footer.textContent =
         'ObservaEdu · Versão ' +
-        (CONFIG.version || '1.2.0') +
+        (CONFIG.version || '1.2.1') +
         ' · ' +
         (cloud
           ? 'Registros salvos na nuvem (Supabase).'
@@ -1186,6 +1219,16 @@
     if (confirmDialog) {
       confirmDialog.addEventListener('close', function () {
         if (confirmResolver) finishConfirm(false);
+      });
+      confirmDialog.addEventListener('click', function (event) {
+        if (event.target === confirmDialog) finishConfirm(false);
+      });
+    }
+
+    const helpDialog = $('helpDialog');
+    if (helpDialog) {
+      helpDialog.addEventListener('click', function (event) {
+        if (event.target === helpDialog) closeHelpDialog();
       });
     }
 
@@ -1394,7 +1437,12 @@
     window.addEventListener('appinstalled', function () {
       pwaInstallPrompt = null;
       updatePwaUi();
-      showToast('ObservaEdu instalado. Os registros continuam salvos apenas neste navegador.', 'success');
+      showToast(
+        state.mode === 'cloud'
+          ? 'ObservaEdu instalado. Os registros continuam na sua conta no Supabase.'
+          : 'ObservaEdu instalado. Os registros continuam salvos apenas neste navegador.',
+        'success'
+      );
     });
 
     updatePwaUi();
@@ -1518,6 +1566,26 @@
       renderSettings();
       updateStoragePanel();
       setView('dashboard', { focus: false });
+
+      // Sem chave pública válida não há nuvem: remove qualquer bloqueio
+      // deixado pela verificação inicial e deixa o modo local explícito.
+      document.documentElement.classList.remove('auth-pending');
+      document.body.classList.remove('auth-locked');
+      const banner = $('appBanner');
+      const previous =
+        banner && !banner.hidden && $('appBannerMessage')
+          ? $('appBannerMessage').textContent || ''
+          : '';
+      const status = Auth && typeof Auth.configuration === 'function' ? Auth.configuration() : null;
+      const baseNotice =
+        'Modo local: os dados ficam apenas neste navegador e não são sincronizados com a nuvem.';
+      const notice = baseNotice + (status && status.reason ? ' ' + status.reason : '');
+      // O aviso do modo local já vem no HTML para evitar deslocamento de
+      // layout. Se ele já estiver na tela, substitui pelo texto completo;
+      // se houver outro aviso (armazenamento), acrescenta sem apagar.
+      const combined =
+        !previous || previous.indexOf(baseNotice) === 0 ? notice : previous + ' ' + notice;
+      showBanner(combined);
       return;
     }
 
@@ -1535,11 +1603,14 @@
     });
 
     if (result.ok) {
-      await enterApp(result.session);
-    } else {
-      state.cloudLoaded = false;
-      updateStoragePanel();
+      // O Auth.init já executou enterApp(session) pelo callback onSignedIn,
+      // mantendo a tela de entrada visível até os dados da conta carregarem.
+      applyModeUi();
+      return;
     }
+
+    state.cloudLoaded = false;
+    updateStoragePanel();
   }
 
   /* =======================================================================
