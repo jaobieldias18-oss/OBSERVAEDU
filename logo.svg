@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="ObservaEdu">
+  <defs>
+    <linearGradient id="logoBg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#3b82f6"/>
+      <stop offset="0.55" stop-color="#1d4ed8"/>
+      <stop offset="1" stop-color="#1e3a8a"/>
+    </linearGradient>
+    <clipPath id="logoClip">
+      <rect width="64" height="64" rx="16"/>
+    </clipPath>
+  </defs>
+
+  <g clip-path="url(#logoClip)">
+    <rect width="64" height="64" fill="url(#logoBg)"/>
+    <circle cx="57" cy="6" r="24" fill="#ffffff" opacity="0.08"/>
+    <circle cx="6" cy="61" r="20" fill="#000000" opacity="0.07"/>
+  </g>
+
+  <!-- Livro aberto -->
+  <path d="M11 39.5c7-2.6 14.4-1.4 21 2.6 6.6-4 14-5.2 21-2.6v12.2c-7-2.2-14.4-1-21 3-6.6-4-14-5.2-21-3z" fill="#ffffff"/>
+  <path d="M32 42.1v12.6" stroke="#1d4ed8" stroke-width="2.4" stroke-linecap="round" opacity="0.5"/>
+  <path d="M15.5 43.4c4.4-1.2 8.8-.7 13 1.4M15.5 47.6c4.4-1.2 8.8-.7 13 1.4M48.5 43.4c-4.4-1.2-8.8-.7-13 1.4M48.5 47.6c-4.4-1.2-8.8-.7-13 1.4"
+        stroke="#93c5fd" stroke-width="1.8" stroke-linecap="round" fill="none" opacity="0.9"/>
+
+  <!-- Olho da observação -->
+  <path d="M13 26.5c4.8-6.6 11.5-10 19-10s14.2 3.4 19 10c-4.8 6.6-11.5 10-19 10s-14.2-3.4-19-10z" fill="#ffffff"/>
+  <circle cx="32" cy="26.5" r="5.4" fill="#1d4ed8"/>
+  <circle cx="32" cy="26.5" r="2.4" fill="#0f2557"/>
+  <circle cx="30.2" cy="24.7" r="1.5" fill="#ffffff"/>
+
+  <!-- Sobrancelha -->
+  <path d="M20 13.5c7.2-3.4 15.6-3.4 24 0" stroke="#bfdbfe" stroke-width="2.6" stroke-linecap="round" fill="none" opacity="0.85"/>
+</svg>
