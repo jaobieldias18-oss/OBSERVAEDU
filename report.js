@@ -153,7 +153,90 @@ window.ObservaEduReport = (function () {
     );
     documentElement.appendChild(footer);
 
+    // Segunda página: acompanhamento dos tópicos da aula.
+    documentElement.appendChild(el('div', 'report-page-break'));
+
+    const page2Header = el('header', 'teacher-report-header teacher-report-page2-header');
+    const brand2 = el('div', 'teacher-report-brand');
+    brand2.appendChild(el('p', 'teacher-report-app', clean(CONFIG.appName) || 'ObservaEdu'));
+    if (clean(school.schoolName)) {
+      brand2.appendChild(el('p', 'teacher-report-school', clean(school.schoolName)));
+    }
+    page2Header.appendChild(brand2);
+    page2Header.appendChild(
+      el('h1', 'teacher-report-title', 'ACOMPANHAMENTO DOS TÓPICOS DA AULA')
+    );
+    documentElement.appendChild(page2Header);
+
+    const meta2 = el('div', 'teacher-report-meta');
+    meta2.appendChild(buildMetaItem('Professor', clean(identification.professor) || 'Não informado'));
+    meta2.appendChild(buildMetaItem('Turma', clean(identification.turma) || 'Não informada'));
+    meta2.appendChild(buildMetaItem('Série', clean(identification.serie) || 'Não informada'));
+    meta2.appendChild(buildMetaItem('Data', formatDate(identification.data)));
+    documentElement.appendChild(meta2);
+
+    const topics = collectTopics(record).filter(function (topic) {
+      return topic.answer === 'sim' || topic.answer === 'parcial' || topic.answer === 'nao';
+    });
+
+    if (topics.length === 0) {
+      documentElement.appendChild(
+        el('p', 'teacher-report-empty', 'Nenhum tópico com resposta observável para esta seção.')
+      );
+    } else {
+      const table = el('table', 'teacher-report-topics-table');
+      const thead = el('thead');
+      const headRow = el('tr');
+      ['Tópico observado', 'Sim', 'Parcialmente', 'Não'].forEach(function (label) {
+        headRow.appendChild(el('th', null, label));
+      });
+      thead.appendChild(headRow);
+      table.appendChild(thead);
+
+      const tbody = el('tbody');
+      topics.forEach(function (topic) {
+        const row = el('tr');
+        row.appendChild(el('td', 'teacher-report-topic-cell', topic.text));
+        row.appendChild(el('td', 'teacher-report-mark-cell', topic.answer === 'sim' ? 'X' : ''));
+        row.appendChild(el('td', 'teacher-report-mark-cell', topic.answer === 'parcial' ? 'X' : ''));
+        row.appendChild(el('td', 'teacher-report-mark-cell', topic.answer === 'nao' ? 'X' : ''));
+        tbody.appendChild(row);
+      });
+      table.appendChild(tbody);
+      documentElement.appendChild(table);
+    }
+
+    const footer2 = el('footer', 'teacher-report-footer');
+    footer2.appendChild(
+      el(
+        'p',
+        null,
+        'Documento resumido destinado ao professor. O histórico completo permanece interno, com a equipe pedagógica.'
+      )
+    );
+    documentElement.appendChild(footer2);
+
     append(container, documentElement);
+  }
+
+  function collectTopics(record) {
+    const topics = [];
+    function addTopic(text, answer) {
+      topics.push({ text: clean(text) || 'Tópico', answer: answer || '' });
+    }
+    (CONFIG.openingQuestions || []).forEach(function (question) {
+      const entry = record && record.abertura ? record.abertura[question.id] : null;
+      const value =
+        entry && typeof entry === 'object' ? entry.valor : typeof entry === 'string' ? entry : '';
+      addTopic(question.text, value);
+    });
+    (CONFIG.sections || []).forEach(function (section) {
+      (section.questions || []).forEach(function (question) {
+        const value = record && record.respostas ? record.respostas[question.id] : '';
+        addTopic(question.text, value);
+      });
+    });
+    return topics;
   }
 
   return { render: render, nextStepsText: nextStepsText };

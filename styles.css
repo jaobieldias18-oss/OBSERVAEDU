@@ -3898,11 +3898,55 @@ input[type="time"] {
   border-top: 1px solid var(--border);
 }
 
-.teacher-report-footer p {
-  margin: 0;
-  font-size: 10.5px;
-  line-height: 1.5;
-  color: var(--muted);
+.report-page-break {
+  page-break-before: always;
+  break-before: page;
+}
+
+.teacher-report-topics-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 12px 0 20px;
+  font-size: 12px;
+}
+
+.teacher-report-topics-table th,
+.teacher-report-topics-table td {
+  border: 1px solid var(--border);
+  padding: 6px 8px;
+}
+
+.teacher-report-topics-table th {
+  background: var(--blue-50);
+  color: var(--blue-900);
+  font-weight: 700;
+  text-align: center;
+}
+
+.teacher-report-topics-table th:first-child {
+  text-align: left;
+}
+
+.teacher-report-mark-cell {
+  text-align: center;
+  font-weight: 700;
+}
+
+.teacher-report-topic-cell {
+  text-align: left;
+}
+
+.teacher-report-topics-table tr {
+  break-inside: avoid;
+  page-break-inside: avoid;
+}
+
+.teacher-report-topics-table thead {
+  display: table-header-group;
+}
+
+.teacher-report-page2-header {
+  margin-top: 0;
 }
 
 /* 10. ANIMAÇÕES ========================================================== */

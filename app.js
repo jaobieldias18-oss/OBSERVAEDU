@@ -3302,6 +3302,159 @@
     renderTeacherHistory(result);
   }
 
+  async function handlePrintPerformanceAnnual() {
+    const teacherGroup = state.performanceFilters.teacherGroup;
+    if (!teacherGroup) {
+      showToast('Selecione um professor para imprimir o desempenho anual.', 'warning');
+      return;
+    }
+    const year = state.performanceFilters.year;
+    if (!year) {
+      showToast('Selecione um ano letivo para imprimir o desempenho anual.', 'warning');
+      return;
+    }
+
+    const result = Performance.compute(state.observations, state.settings, state.performanceFilters);
+    const directory = result.directory || {};
+    const teacherEntry = (directory.list || []).find(function (entry) {
+      return entry.groupKey === teacherGroup;
+    });
+    const teacherName = teacherEntry ? teacherEntry.name : 'Professor';
+    function escapeHtml(value) {
+      return String(value || '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+    }
+
+    const schoolName = clean(state.settings && state.settings.schoolName);
+    const generatedAt = formatDateTimeBR(nowIso());
+    const records = (result.records || []).slice().sort(function (a, b) {
+      return String((a.identificacao && a.identificacao.data) || '').localeCompare(
+        String((b.identificacao && b.identificacao.data) || '')
+      );
+    });
+
+    const totals = result.totals || { sim: 0, parcial: 0, nao: 0, na: 0, answered: 0, applicable: 0 };
+    const classes = result.classesObserved || [];
+    const punct = result.openingById && result.openingById.abertura_pontualidade;
+    const attend = result.openingById && result.openingById.abertura_chamada;
+
+    function pct(part, whole) {
+      if (!whole) return '—';
+      return Math.round((part / whole) * 100) + '%';
+    }
+
+    const monthlyRows = (result.monthly || [])
+      .slice()
+      .sort(function (a, b) {
+        return (a.year - b.year) || (a.month - b.month);
+      })
+      .map(function (m) {
+        const pPct = m.pontualidadeAnswered ? pct(m.pontualidadeSim, m.pontualidadeAnswered) : '—';
+        const cPct = m.chamadaAnswered ? pct(m.chamadaSim, m.chamadaAnswered) : '—';
+        return (
+          '<tr>' +
+          '<td>' + m.label + '/' + m.year + '</td>' +
+          '<td style="text-align:center">' + m.count + '</td>' +
+          '<td style="text-align:center">' + pPct + '</td>' +
+          '<td style="text-align:center">' + cPct + '</td>' +
+          '</tr>'
+        );
+      })
+      .join('');
+
+    const historyRows = records
+      .map(function (record) {
+        const ident = record.identificacao || {};
+        return (
+          '<tr>' +
+          '<td>' + formatDateBR(ident.data) + '</td>' +
+          '<td>' + escapeHtml(clean(ident.serie) || '—') + '</td>' +
+          '<td>' + escapeHtml(clean(ident.turma) || '—') + '</td>' +
+          '<td>' + escapeHtml(clean(ident.disciplina) || '—') + '</td>' +
+          '<td>' + (record.status === 'concluida' ? 'Concluída' : 'Em andamento') + '</td>' +
+          '</tr>'
+        );
+      })
+      .join('');
+
+    const html =
+      '<!doctype html><html lang="pt-BR"><head><meta charset="utf-8">' +
+      '<title>Desempenho anual - ' + escapeHtml(teacherName) + '</title>' +
+      '<style>' +
+      'body{font-family:Arial,Helvetica,sans-serif;color:#1e293b;margin:0;padding:24px;font-size:12px;}' +
+      '@page{size:A4;margin:14mm 13mm;}' +
+      'h1{font-size:18px;color:#1e3a8a;margin:0 0 4px;}' +
+      'h2{font-size:14px;color:#1e3a8a;margin:16px 0 6px;border-bottom:1px solid #dbeafe;padding-bottom:4px;}' +
+      '.brand{font-size:11px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:#1d4ed8;margin-bottom:2px;}' +
+      '.school{font-size:11.5px;color:#64748b;margin-bottom:12px;}' +
+      '.meta{display:grid;grid-template-columns:repeat(4,1fr);gap:8px 16px;margin-bottom:16px;padding:10px 0;border-bottom:1px solid #e2e8f0;}' +
+      '.meta-item{display:flex;flex-direction:column;gap:2px;}' +
+      '.meta-label{font-size:9px;font-weight:700;text-transform:uppercase;color:#94a3b8;}' +
+      '.meta-value{font-size:12px;color:#0f172a;}' +
+      '.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:16px;}' +
+      '.stat{border:1px solid #e2e8f0;border-radius:8px;padding:8px 10px;}' +
+      '.stat-label{font-size:10px;color:#64748b;margin:0 0 2px;}' +
+      '.stat-value{font-size:16px;font-weight:700;color:#1e3a8a;margin:0;}' +
+      '.stat-detail{font-size:9.5px;color:#94a3b8;margin:2px 0 0;}' +
+      'table{width:100%;border-collapse:collapse;margin:8px 0 16px;font-size:11px;}' +
+      'th,td{border:1px solid #cbd5e1;padding:5px 7px;}' +
+      'th{background:#eff6ff;color:#1e3a8a;font-weight:700;text-align:center;}' +
+      'th:first-child{text-align:left;}' +
+      'tr{break-inside:avoid;page-break-inside:avoid;}' +
+      'thead{display:table-header-group;}' +
+      '.empty{font-style:italic;color:#94a3b8;font-size:11px;}' +
+      '.footer{margin-top:20px;padding-top:8px;border-top:1px solid #e2e8f0;font-size:9.5px;color:#94a3b8;}' +
+      '</style></head><body>' +
+      '<div class="brand">ObservaEdu</div>' +
+      (schoolName ? '<div class="school">' + escapeHtml(schoolName) + '</div>' : '') +
+      '<h1>Desempenho anual do professor</h1>' +
+      '<div class="meta">' +
+      '<div class="meta-item"><span class="meta-label">Professor</span><span class="meta-value">' + escapeHtml(teacherName) + '</span></div>' +
+      '<div class="meta-item"><span class="meta-label">Ano analisado</span><span class="meta-value">' + year + '</span></div>' +
+      '<div class="meta-item"><span class="meta-label">Data de geração</span><span class="meta-value">' + generatedAt + '</span></div>' +
+      '<div class="meta-item"><span class="meta-label">Observações</span><span class="meta-value">' + result.sampleSize + '</span></div>' +
+      '</div>' +
+      '<h2>Resumo anual</h2>' +
+      '<div class="stats">' +
+      '<div class="stat"><p class="stat-label">Observações concluídas</p><p class="stat-value">' + result.sampleSize + '</p><p class="stat-detail">' + (result.sampleSize === result.allConcludedCount ? 'Todas as concluídas' : 'de ' + result.allConcludedCount + ' concluídas no total') + '</p></div>' +
+      '<div class="stat"><p class="stat-label">Turmas observadas</p><p class="stat-value">' + classes.length + '</p><p class="stat-detail">' + (classes.length ? classes.slice(0, 4).join(' · ') : 'Nenhuma neste recorte') + '</p></div>' +
+      '<div class="stat"><p class="stat-label">Respostas: Sim</p><p class="stat-value">' + totals.sim + '</p><p class="stat-detail">' + pct(totals.sim, totals.applicable) + ' das aplicáveis</p></div>' +
+      '<div class="stat"><p class="stat-label">Respostas: Parcialmente</p><p class="stat-value">' + totals.parcial + '</p><p class="stat-detail">' + pct(totals.parcial, totals.applicable) + '</p></div>' +
+      '</div>' +
+      '<div class="stats">' +
+      '<div class="stat"><p class="stat-label">Respostas: Não</p><p class="stat-value">' + totals.nao + '</p><p class="stat-detail">' + pct(totals.nao, totals.applicable) + '</p></div>' +
+      '<div class="stat"><p class="stat-label">Não observado / N/A</p><p class="stat-value">' + totals.na + '</p><p class="stat-detail">Não contabilizado como negativo</p></div>' +
+      '<div class="stat"><p class="stat-label">Pontualidade (Sim)</p><p class="stat-value">' + (punct ? pct(punct.sim, punct.answered) : '—') + '</p><p class="stat-detail">' + (punct ? punct.answered + ' respostas' : 'Sem dados') + '</p></div>' +
+      '<div class="stat"><p class="stat-label">Chamada (Sim)</p><p class="stat-value">' + (attend ? pct(attend.sim, attend.answered) : '—') + '</p><p class="stat-detail">' + (attend ? attend.answered + ' respostas' : 'Sem dados') + '</p></div>' +
+      '</div>' +
+      '<h2>Acompanhamento mensal</h2>' +
+      (monthlyRows
+        ? '<table><thead><tr><th>Mês</th><th>Observações</th><th>Pontualidade (Sim)</th><th>Chamada (Sim)</th></tr></thead><tbody>' + monthlyRows + '</tbody></table>'
+        : '<p class="empty">Nenhuma observação concluída neste período.</p>') +
+      '<h2>Histórico de observações</h2>' +
+      (historyRows
+        ? '<table><thead><tr><th>Data</th><th>Série</th><th>Turma</th><th>Disciplina</th><th>Situação</th></tr></thead><tbody>' + historyRows + '</tbody></table>'
+        : '<p class="empty">Nenhuma observação registrada para este professor neste ano.</p>') +
+      '<div class="footer">ObservaEdu · Relatório de desempenho anual. Documento gerado a partir de dados registrados no sistema. Sem ranking, nota ou diagnóstico automático.</div>' +
+      '</body></html>';
+
+    const win = window.open('', '_blank');
+    if (!win) {
+      showToast('O navegador bloqueou a janela de impressão. Permita pop-ups para este site.', 'error');
+      return;
+    }
+    win.document.open();
+    win.document.write(html);
+    win.document.close();
+    win.focus();
+    setTimeout(function () {
+      win.print();
+    }, 300);
+  }
+
   function resetPerformanceFilters() {
     state.performanceFilters = {
       teacherGroup: '',
@@ -5943,6 +6096,10 @@
 
       case 'clear-performance-filters':
         resetPerformanceFilters();
+        break;
+
+      case 'print-performance-annual':
+        handlePrintPerformanceAnnual();
         break;
 
       case 'select-teacher':
