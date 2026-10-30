@@ -3582,10 +3582,16 @@
     const displayNameInput = $('settingsDisplayName');
     if (!nameInput || !unitInput || !cityInput) return;
 
-    nameInput.value = state.settings.schoolName || '';
-    unitInput.value = state.settings.schoolUnit || '';
-    cityInput.value = state.settings.city || '';
-    if (displayNameInput) {
+    if (document.activeElement !== nameInput) {
+      nameInput.value = state.settings.schoolName || '';
+    }
+    if (document.activeElement !== unitInput) {
+      unitInput.value = state.settings.schoolUnit || '';
+    }
+    if (document.activeElement !== cityInput) {
+      cityInput.value = state.settings.city || '';
+    }
+    if (displayNameInput && document.activeElement !== displayNameInput) {
       displayNameInput.value = state.settings.displayName || '';
       displayNameInput.placeholder = accountLabel() || 'Nome do orientador';
     }

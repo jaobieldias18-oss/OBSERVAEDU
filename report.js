@@ -42,6 +42,12 @@ window.ObservaEduReport = (function () {
     return typeof value === 'string' ? value.trim() : '';
   }
 
+  function formatDate(isoDate) {
+    const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(clean(isoDate));
+    if (!match) return 'Não informado';
+    return match[3] + '/' + match[2] + '/' + match[1];
+  }
+
   function formatTime(value) {
     const match = /^(\d{1,2}):(\d{2})/.exec(clean(value));
     if (!match) return clean(value);
