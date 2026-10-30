@@ -5129,7 +5129,8 @@ body.auth-locked {
   .report-page-notice,
   .toast-container,
   .sidebar-backdrop,
-  .no-print {
+  .no-print,
+  .skip-link {
     display: none !important;
   }
 

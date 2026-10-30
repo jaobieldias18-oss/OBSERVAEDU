@@ -42,10 +42,12 @@ window.ObservaEduReport = (function () {
     return typeof value === 'string' ? value.trim() : '';
   }
 
-  function formatDate(isoDate) {
-    const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(clean(isoDate));
-    if (!match) return 'Não informado';
-    return match[3] + '/' + match[2] + '/' + match[1];
+  function formatTime(value) {
+    const match = /^(\d{1,2}):(\d{2})/.exec(clean(value));
+    if (!match) return clean(value);
+    const h = match[1].padStart(2, '0');
+    const m = match[2];
+    return h + 'h' + m;
   }
 
   function buildMetaItem(label, value) {
@@ -77,7 +79,7 @@ window.ObservaEduReport = (function () {
   }
 
   function nextStepsText(record) {
-    return clean(record && record.complementares && record.complementares.encaminhamentos);
+    return clean(record && record.complementares && record.complementares.sugestoes_acao);
   }
 
   function render(container, record, settings, analysis) {
@@ -138,14 +140,57 @@ window.ObservaEduReport = (function () {
       buildMetaItem('Turma', clean(identification.turma) || 'Não informada')
     );
     meta.appendChild(buildMetaItem('Data', formatDate(identification.data)));
-    meta.appendChild(buildMetaItem('Responsável pelo acompanhamento', observer));
+    meta.appendChild(buildMetaItem('Orientador responsável', observer));
     if (clean(identification.tema)) {
       meta.appendChild(buildMetaItem('Tema da aula', clean(identification.tema)));
     }
-    if (clean(identification.horario)) {
+    const inicio = clean(identification.horario);
+    const fim = clean(identification.horarioFinal);
+    let periodo = '';
+    if (inicio && fim) {
+      periodo = formatTime(inicio) + ' às ' + formatTime(fim);
+    } else if (inicio) {
+      periodo = formatTime(inicio);
+    } else if (fim) {
+      periodo = formatTime(fim);
+    }
+    if (periodo) {
+      meta.appendChild(buildMetaItem('Período da observação', periodo));
+    } else if (clean(identification.horario)) {
       meta.appendChild(buildMetaItem('Horário', clean(identification.horario)));
     }
     documentElement.appendChild(meta);
+
+    const openingQuestions = CONFIG.openingQuestions || [];
+    const openingLines = [];
+    openingQuestions.forEach(function (question) {
+      const entry = record && record.abertura ? record.abertura[question.id] : null;
+      const value =
+        entry && typeof entry === 'object'
+          ? entry.valor
+          : typeof entry === 'string'
+          ? entry
+          : '';
+      const option = (CONFIG.openingOptions || []).find(function (item) {
+        return item.value === value;
+      });
+      const label = option ? option.label : value ? value : 'Não informado';
+      let line = question.text + ': ' + label;
+      if (entry && typeof entry === 'object' && clean(entry.nota)) {
+        line += ' — ' + clean(entry.nota);
+      }
+      openingLines.push(line);
+    });
+    if (openingLines.length > 0) {
+      const openingBlock = el('section', 'teacher-report-block');
+      openingBlock.appendChild(
+        el('h2', 'teacher-report-block-title', 'Pontualidade e realização da chamada')
+      );
+      openingLines.forEach(function (line) {
+        openingBlock.appendChild(el('p', 'teacher-report-text', line));
+      });
+      documentElement.appendChild(openingBlock);
+    }
 
     if (synthesis) {
       documentElement.appendChild(
@@ -165,6 +210,14 @@ window.ObservaEduReport = (function () {
       )
     );
 
+    const pontosPositivos = clean(record && record.complementares && record.complementares.pontos_positivos);
+    const pontosAtencao = clean(record && record.complementares && record.complementares.pontos_atencao);
+    if (pontosPositivos) {
+      documentElement.appendChild(buildTextBlock('Pontos positivos', pontosPositivos, ''));
+    }
+    if (pontosAtencao) {
+      documentElement.appendChild(buildTextBlock('Pontos de atenção', pontosAtencao, ''));
+    }
     if (orientations) {
       documentElement.appendChild(
         buildTextBlock(texts.nextStepsTitle || 'Orientações e próximos passos', orientations, '')

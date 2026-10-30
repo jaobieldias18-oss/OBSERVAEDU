@@ -100,160 +100,100 @@ window.OBSERVAEDU_CONFIG = {
   // o trabalho do professor.
   sections: [
     {
-      id: 'introducao',
+      id: 'inicio',
       step: 2,
-      title: 'Introdução',
-      shortTitle: 'Introdução',
-      description: 'Acolhimento, abertura da aula e conexão com o que a turma já sabe.',
-      commentLabel: 'Comentários sobre a introdução',
+      title: 'Início da aula',
+      shortTitle: 'Início',
+      description: 'Acolhimento, organização e preparação para a aula.',
+      commentLabel: 'Observações sobre o início da aula',
       commentPlaceholder: 'Registre evidências, exemplos e contextos observados nesta etapa.',
       questions: [
         {
-          id: 'intro_1',
-          text: 'O professor cumprimentou e acolheu os alunos?',
-          reflection: 'Vale refletir sobre como a acolhida inicial pode ser planejada para criar um clima favorável à aula.'
+          id: 'inicio_1',
+          text: 'Acolhimento e organização. Recebe os estudantes com respeito e organiza a sala.',
+          reflection: 'Vale refletir sobre como a acolhida e a organização inicial podem favorecer o clima da aula.'
         },
         {
-          id: 'intro_2',
-          text: 'Apresentou um disparador para despertar o interesse pela aula?',
-          reflection: 'Considere planejar uma situação-problema, pergunta, imagem ou outro disparador que mobilize a curiosidade dos estudantes.'
+          id: 'inicio_2',
+          text: 'Apresentação da aula. Explica os objetivos e apresenta uma atividade inicial que desperte interesse.',
+          reflection: 'Considere planejar uma situação-problema, pergunta ou disparador que mobilize a curiosidade dos estudantes.'
         },
         {
-          id: 'intro_3',
-          text: 'Retomou conhecimentos prévios ou conteúdos trabalhados anteriormente?',
-          reflection: 'Pode ser útil reservar um momento inicial para resgatar o que a turma já sabe e conectar esse repertório ao novo conteúdo.'
+          id: 'inicio_3',
+          text: 'Frequência e pontualidade. Realiza a chamada e inicia a aula no horário previsto.',
+          reflection: 'Pode ser útil organizar a chamada e o início da aula de forma que o tempo seja aproveitado.'
         },
         {
-          id: 'intro_4',
-          text: 'Apresentou o tema e os objetivos da aula?',
-          reflection: 'Reflita sobre formas de explicitar o tema e os objetivos da aula de maneira acessível, para que os estudantes saibam o que se espera daquele encontro.'
-        },
-        {
-          id: 'intro_5',
-          text: 'Relacionou o conteúdo com situações do cotidiano?',
-          reflection: 'Considere buscar exemplos ou situações do cotidiano que aproximem o conteúdo da experiência dos estudantes.'
-        },
-        {
-          id: 'intro_6',
-          text: 'Organizou a turma e preparou os materiais necessários?',
-          reflection: 'Vale pensar no planejamento prévio da organização da turma e dos materiais, antecipando o que pode interferir no início da aula.'
+          id: 'inicio_4',
+          text: 'Preparação da atividade. Organiza os recursos necessários para começar a aula.',
+          reflection: 'Vale pensar no planejamento prévio dos recursos e materiais.'
         }
       ]
     },
     {
       id: 'desenvolvimento',
       step: 3,
-      title: 'Desenvolvimento',
+      title: 'Desenvolvimento da aula',
       shortTitle: 'Desenvolvimento',
-      description: 'Condução do conteúdo, atividades, participação e acompanhamento da turma.',
-      commentLabel: 'Comentários sobre o desenvolvimento',
+      description: 'Condução do conteúdo, participação e acompanhamento da turma.',
+      commentLabel: 'Observações sobre o desenvolvimento da aula',
       commentPlaceholder: 'Registre evidências, exemplos e contextos observados nesta etapa.',
       questions: [
         {
-          id: 'des_1',
-          text: 'O professor explicou o conteúdo de forma clara e organizada?',
+          id: 'desenvolvimento_1',
+          text: 'Domínio do conteúdo. Demonstra conhecimento e explica o conteúdo com clareza.',
           reflection: 'Reflita sobre a estrutura da explicação: sequência, exemplos e linguagem podem tornar o conteúdo mais acessível.'
         },
         {
-          id: 'des_2',
-          text: 'Utilizou materiais didáticos ou recursos tecnológicos de forma pertinente?',
-          reflection: 'Considere avaliar quais recursos se articulam melhor aos objetivos da aula e como serão usados para apoiar a aprendizagem.'
+          id: 'desenvolvimento_2',
+          text: 'Estratégias de ensino. Utiliza estratégias adequadas e considera os conhecimentos prévios dos estudantes.',
+          reflection: 'Considere avaliar quais estratégias se articulam melhor aos objetivos da aula.'
         },
         {
-          id: 'des_3',
-          text: 'Propôs atividades coerentes com os objetivos da aula?',
-          reflection: 'Pode ser útil explicitar a relação entre cada atividade proposta e os objetivos da aula.'
+          id: 'desenvolvimento_3',
+          text: 'Participação dos estudantes. Incentiva a participação, interação e colaboração.',
+          reflection: 'Reflita sobre estratégias que ampliem a participação de todos os estudantes.'
         },
         {
-          id: 'des_4',
-          text: 'Estimulou a participação dos alunos?',
-          reflection: 'Reflita sobre estratégias que ampliem a participação de todos, não apenas de alguns estudantes.'
+          id: 'desenvolvimento_4',
+          text: 'Acompanhamento da aprendizagem. Identifica dificuldades, esclarece dúvidas e atende os estudantes quando necessário.',
+          reflection: 'Vale planejar momentos de checagem de compreensão e atendimento aos estudantes.'
         },
         {
-          id: 'des_5',
-          text: 'Incentivou o pensamento crítico e a autonomia dos estudantes?',
-          reflection: 'Considere propor perguntas abertas, escolhas ou pequenos desafios que convidem à argumentação e à autonomia.'
-        },
-        {
-          id: 'des_6',
-          text: 'Verificou se os estudantes estavam compreendendo o conteúdo?',
-          reflection: 'Vale planejar momentos curtos de checagem de compreensão ao longo da aula, e não apenas ao final.'
-        },
-        {
-          id: 'des_7',
-          text: 'Circulou pela sala e acompanhou a realização das atividades?',
-          reflection: 'Reflita sobre como a circulação pela sala pode favorecer o acompanhamento próximo das atividades.'
-        },
-        {
-          id: 'des_8',
-          text: 'Esclareceu dúvidas e ofereceu orientações?',
-          reflection: 'Considere formas de tornar as orientações e o esclarecimento de dúvidas acessíveis a toda a turma.'
-        },
-        {
-          id: 'des_9',
-          text: 'Gerenciou adequadamente o tempo e o ritmo da aula?',
-          reflection: 'Pode ser útil planejar a distribuição do tempo por etapa e prever ajustes de ritmo durante a aula.'
-        },
-        {
-          id: 'des_10',
-          text: 'Mediou conflitos com respeito e imparcialidade, quando necessário?',
-          reflection: 'Reflita sobre estratégias de mediação que preservem o respeito e a imparcialidade em situações de conflito.'
-        },
-        {
-          id: 'des_11',
-          text: 'Considerou diferentes necessidades e ritmos de aprendizagem?',
-          reflection: 'Considere planejar adaptações ou apoios que considerem diferentes ritmos e necessidades de aprendizagem.'
-        },
-        {
-          id: 'des_12',
-          text: 'Promoveu um ambiente respeitoso e favorável à aprendizagem?',
-          reflection: 'Vale refletir sobre ações que contribuam para um clima de respeito e participação, considerando o contexto observado.'
+          id: 'desenvolvimento_5',
+          text: 'Organização e gestão. Administra o tempo, os recursos e possíveis situações de conflito.',
+          reflection: 'Pode ser útil planejar a distribuição do tempo e estratégias de mediação.'
         }
       ]
     },
     {
-      id: 'conclusao',
+      id: 'fechamento',
       step: 4,
-      title: 'Conclusão',
-      shortTitle: 'Conclusão',
-      description: 'Fechamento da aula, retomada dos objetivos e continuidade.',
-      commentLabel: 'Comentários sobre a conclusão',
+      title: 'Fechamento da aula',
+      shortTitle: 'Fechamento',
+      description: 'Retomada, orientações futuras e encerramento.',
+      commentLabel: 'Observações sobre o fechamento da aula',
       commentPlaceholder: 'Registre evidências, exemplos e contextos observados nesta etapa.',
       questions: [
         {
-          id: 'con_1',
-          text: 'Retomou os principais pontos trabalhados?',
-          reflection: 'Reflita sobre como uma retomada breve dos principais pontos pode ajudar a consolidar o que foi trabalhado.'
+          id: 'fechamento_1',
+          text: 'Retomada da aprendizagem. Retoma ou sistematiza os principais conteúdos trabalhados.',
+          reflection: 'Reflita sobre como uma retomada breve pode ajudar a consolidar o que foi trabalhado.'
         },
         {
-          id: 'con_2',
-          text: 'Verificou se os objetivos da aula foram alcançados?',
-          reflection: 'Considere planejar evidências ou momentos de verificação que permitam acompanhar se os objetivos foram alcançados, sem concluir apenas pela impressão da aula.'
+          id: 'fechamento_2',
+          text: 'Orientações futuras. Apresenta tarefas, atividades ou orientações para as próximas aulas, quando necessário.',
+          reflection: 'Vale avaliar se tarefas de continuidade são necessárias e como serão explicadas.'
         },
         {
-          id: 'con_3',
-          text: 'Propôs uma atividade de síntese ou verificação da aprendizagem?',
-          reflection: 'Pode ser útil prever uma atividade curta de síntese ou verificação ao final da aula.'
+          id: 'fechamento_3',
+          text: 'Organização final. Organiza o espaço e os materiais para a continuidade das atividades.',
+          reflection: 'Considere a organização do espaço e dos materiais ao final da aula.'
         },
         {
-          id: 'con_4',
-          text: 'Deu espaço para dúvidas finais?',
-          reflection: 'Reflita sobre reservar um momento final para dúvidas e esclarecimentos.'
-        },
-        {
-          id: 'con_5',
-          text: 'Relacionou o conteúdo com a próxima aula, quando pertinente?',
-          reflection: 'Considere explicitar possíveis conexões com a próxima aula, quando fizer sentido para o planejamento.'
-        },
-        {
-          id: 'con_6',
-          text: 'Orientou tarefas ou atividades de continuidade, quando necessário?',
-          reflection: 'Vale avaliar se tarefas de continuidade são necessárias e como serão explicadas e acompanhadas.'
-        },
-        {
-          id: 'con_7',
-          text: 'Encerrou a aula de forma organizada?',
-          reflection: 'Reflita sobre a organização do encerramento, incluindo a indicação do que foi trabalhado e do que vem a seguir.'
+          id: 'fechamento_4',
+          text: 'Encerramento. Finaliza a aula adequadamente, respeitando o horário e esclarecendo dúvidas.',
+          reflection: 'Reflita sobre a organização do encerramento e a disponibilidade para dúvidas.'
         }
       ]
     }
@@ -262,29 +202,19 @@ window.OBSERVAEDU_CONFIG = {
   // Campos de texto livre ao final do formulário.
   complementaryFields: [
     {
-      key: 'pontosFortes',
-      label: 'Pontos fortes observados',
-      placeholder: 'Descreva práticas, atitudes ou situações concretas observadas que se destacaram.'
+      key: 'pontos_positivos',
+      label: 'Pontos positivos',
+      placeholder: 'Aspectos positivos observados na aula.'
     },
     {
-      key: 'melhorias',
-      label: 'Oportunidades de melhoria',
-      placeholder: 'Registre aspectos que podem ser aprimorados, com base no que foi observado.'
+      key: 'pontos_atencao',
+      label: 'Pontos de atenção',
+      placeholder: 'Aspectos que precisam de atenção.'
     },
     {
-      key: 'sugestoes',
-      label: 'Sugestões pedagógicas',
-      placeholder: 'Sugestões que possam contribuir com o planejamento e a prática pedagógica.'
-    },
-    {
-      key: 'encaminhamentos',
-      label: 'Encaminhamentos ou ações futuras',
-      placeholder: 'Combinados, acompanhamentos ou próximos passos, quando houver.'
-    },
-    {
-      key: 'observacoesGerais',
-      label: 'Observações gerais',
-      placeholder: 'Outras informações relevantes sobre o contexto da observação.'
+      key: 'sugestoes_acao',
+      label: 'Sugestões e plano de ação',
+      placeholder: 'Orientações práticas para as próximas aulas.'
     }
   ],
 

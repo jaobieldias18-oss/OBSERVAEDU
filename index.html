@@ -293,9 +293,6 @@
           <strong>ObservaEdu</strong>
           <span>Observação pedagógica</span>
         </div>
-        <button class="icon-btn sidebar-close" id="sidebarClose" type="button" aria-label="Fechar menu">
-          <svg class="icon" aria-hidden="true"><use href="#i-close"></use></svg>
-        </button>
       </div>
 
       <nav class="main-nav" aria-label="Seções do sistema">
@@ -538,7 +535,7 @@
             <div class="form-toolbar-actions">
               <div class="form-progress" aria-live="polite">
                 <div class="progress-label">
-                  <span id="progressText">0 de 27 perguntas respondidas</span>
+                  <span id="progressText">0 de 15 perguntas respondidas</span>
                   <span id="progressPercent">0%</span>
                 </div>
                 <div class="progress-track" role="progressbar" aria-label="Progresso das perguntas" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" id="progressTrack">
@@ -616,9 +613,14 @@
                     <p class="field-error" data-error-for="data"></p>
                   </div>
                   <div class="field">
-                    <label for="fieldHorario">Horário da aula <span class="optional-mark">(opcional)</span></label>
+                    <label for="fieldHorario">Horário inicial <span class="optional-mark">(opcional)</span></label>
                     <input id="fieldHorario" type="time" data-field="horario">
                     <p class="field-error" data-error-for="horario"></p>
+                  </div>
+                  <div class="field">
+                    <label for="fieldHorarioFinal">Horário final <span class="optional-mark">(opcional)</span></label>
+                    <input id="fieldHorarioFinal" type="time" data-field="horarioFinal">
+                    <p class="field-error" data-error-for="horarioFinal"></p>
                   </div>
                   <div class="field">
                     <label for="fieldObservador">Orientador responsável</label>

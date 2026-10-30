@@ -79,10 +79,10 @@
 
   const STEPS = [
     { number: 1, title: 'Identificação', hint: 'Dados essenciais' },
-    { number: 2, title: 'Introdução', hint: 'Abertura + 6 perguntas' },
-    { number: 3, title: 'Desenvolvimento', hint: '12 perguntas' },
-    { number: 4, title: 'Conclusão', hint: '7 perguntas' },
-    { number: 5, title: 'Complementares', hint: 'Textos opcionais' },
+    { number: 2, title: 'Início da aula', hint: '4 critérios' },
+    { number: 3, title: 'Desenvolvimento', hint: '5 critérios' },
+    { number: 4, title: 'Fechamento', hint: '4 critérios' },
+    { number: 5, title: 'Feedback ao professor', hint: '3 campos opcionais' },
     { number: 6, title: 'Análise', hint: 'Revisão dos textos' },
     { number: 7, title: 'Observações para o professor', hint: 'Texto da devolutiva' }
   ];
@@ -419,6 +419,7 @@
       clean(identificacao.turma) ||
       clean(identificacao.data) ||
       clean(identificacao.horario) ||
+         clean(identificacao.horarioFinal) ||
       clean(identificacao.observador) ||
       clean(identificacao.tema) ||
       clean(record.observacoesProfessor)
@@ -464,6 +465,7 @@
         turma: '',
         data: '',
         horario: '',
+         horarioFinal: '',
         observador: effectiveObserverName(),
         tema: ''
       },
@@ -550,6 +552,7 @@
         turma: stringValue(identification.turma),
         data: stringValue(identification.data),
         horario: stringValue(identification.horario),
+         horarioFinal: stringValue(identification.horarioFinal),
         observador: stringValue(identification.observador),
         tema: stringValue(identification.tema)
       },
@@ -1462,7 +1465,6 @@
 
   function wireStaticEvents() {
     const menuToggle = $('menuToggle');
-    const sidebarClose = $('sidebarClose');
     const sidebarBackdrop = $('sidebarBackdrop');
     const bannerDismiss = $('bannerDismiss');
     const formPrev = $('formPrev');
@@ -1471,7 +1473,6 @@
     const importFileInput = $('importFileInput');
 
     if (menuToggle) menuToggle.addEventListener('click', openSidebar);
-    if (sidebarClose) sidebarClose.addEventListener('click', closeSidebar);
     if (sidebarBackdrop) sidebarBackdrop.addEventListener('click', closeSidebar);
     if (bannerDismiss) bannerDismiss.addEventListener('click', hideBanner);
 
@@ -3585,7 +3586,8 @@
     unitInput.value = state.settings.schoolUnit || '';
     cityInput.value = state.settings.city || '';
     if (displayNameInput) {
-      displayNameInput.value = state.settings.displayName || accountLabel();
+      displayNameInput.value = state.settings.displayName || '';
+      displayNameInput.placeholder = accountLabel() || 'Nome do orientador';
     }
 
     renderTeacherList();
