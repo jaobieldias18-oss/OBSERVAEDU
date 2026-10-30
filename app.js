@@ -3314,7 +3314,14 @@
       return;
     }
 
-    const result = Performance.compute(state.observations, state.settings, state.performanceFilters);
+    const win = window.open('', '_blank');
+    if (!win) {
+      showToast('O navegador bloqueou a janela de impressão. Permita pop-ups para este site.', 'error');
+      return;
+    }
+
+    try {
+      const result = Performance.compute(state.observations, state.settings, state.performanceFilters);
     const directory = result.directory || {};
     const teacherEntry = (directory.list || []).find(function (entry) {
       return entry.groupKey === teacherGroup;
@@ -3441,11 +3448,6 @@
       '<div class="footer">ObservaEdu · Relatório de desempenho anual. Documento gerado a partir de dados registrados no sistema. Sem ranking, nota ou diagnóstico automático.</div>' +
       '</body></html>';
 
-    const win = window.open('', '_blank');
-    if (!win) {
-      showToast('O navegador bloqueou a janela de impressão. Permita pop-ups para este site.', 'error');
-      return;
-    }
     win.document.open();
     win.document.write(html);
     win.document.close();
@@ -3453,7 +3455,12 @@
     setTimeout(function () {
       win.print();
     }, 300);
+  } catch (error) {
+    try { win.close(); } catch (e) {}
+    showToast('Não foi possível gerar o relatório. Tente novamente.', 'error');
+    console.error('ObservaEdu: erro ao gerar desempenho anual.', error);
   }
+}
 
   function resetPerformanceFilters() {
     state.performanceFilters = {

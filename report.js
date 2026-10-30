@@ -80,12 +80,20 @@ window.ObservaEduReport = (function () {
     return clean(record && record.complementares && record.complementares.encaminhamentos);
   }
 
-  function render(container, record, settings) {
+  function render(container, record, settings, analysis) {
     if (!container) return;
     const identification = (record && record.identificacao) || {};
     const school = settings || {};
     const texts = CONFIG.teacherReport || {};
     const nextSteps = nextStepsText(record);
+    const analysisData = analysis || null;
+    const synthesis =
+      analysisData && analysisData.narratives ? clean(analysisData.narratives.sintese) : '';
+    const suggestions =
+      analysisData && analysisData.narratives ? clean(analysisData.narratives.sugestoes) : '';
+    const observer =
+      clean(identification.observador) || clean(school.displayName) || 'Não informado';
+    const orientations = nextSteps || suggestions;
 
     container.textContent = '';
 
@@ -114,19 +122,40 @@ window.ObservaEduReport = (function () {
     documentElement.appendChild(header);
 
     const meta = el('div', 'teacher-report-meta');
+    if (clean(school.schoolName)) {
+      meta.appendChild(buildMetaItem('Escola', clean(school.schoolName)));
+    }
     meta.appendChild(
       buildMetaItem('Professor', clean(identification.professor) || 'Não informado')
     );
-    meta.appendChild(
-      buildMetaItem('Turma', clean(identification.turma) || 'Não informada')
-    );
+    if (clean(identification.disciplina)) {
+      meta.appendChild(buildMetaItem('Disciplina', clean(identification.disciplina)));
+    }
     meta.appendChild(
       buildMetaItem('Série', clean(identification.serie) || 'Não informada')
     );
     meta.appendChild(
-      buildMetaItem('Data', formatDate(identification.data))
+      buildMetaItem('Turma', clean(identification.turma) || 'Não informada')
     );
+    meta.appendChild(buildMetaItem('Data', formatDate(identification.data)));
+    meta.appendChild(buildMetaItem('Responsável pelo acompanhamento', observer));
+    if (clean(identification.tema)) {
+      meta.appendChild(buildMetaItem('Tema da aula', clean(identification.tema)));
+    }
+    if (clean(identification.horario)) {
+      meta.appendChild(buildMetaItem('Horário', clean(identification.horario)));
+    }
     documentElement.appendChild(meta);
+
+    if (synthesis) {
+      documentElement.appendChild(
+        buildTextBlock(
+          'Síntese descritiva da observação',
+          synthesis,
+          ''
+        )
+      );
+    }
 
     documentElement.appendChild(
       buildTextBlock(
@@ -136,9 +165,9 @@ window.ObservaEduReport = (function () {
       )
     );
 
-    if (nextSteps) {
+    if (orientations) {
       documentElement.appendChild(
-        buildTextBlock(texts.nextStepsTitle || 'Próximos passos', nextSteps, '')
+        buildTextBlock(texts.nextStepsTitle || 'Orientações e próximos passos', orientations, '')
       );
     }
 
