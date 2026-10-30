@@ -9,7 +9,7 @@
 
 window.OBSERVAEDU_CONFIG = {
   appName: 'ObservaEdu',
-  version: '1.2.1',
+  version: '2.0.0',
 
   // Chaves usadas no localStorage. Não altere sem necessidade:
   // mudar a chave faz o sistema "perder de vista" os dados antigos.
@@ -27,6 +27,71 @@ window.OBSERVAEDU_CONFIG = {
   statuses: {
     rascunho: { label: 'Em andamento', tone: 'warning' },
     concluida: { label: 'Concluída', tone: 'positive' }
+  },
+
+  // Etapas de ensino e séries. Os seletores do formulário são dependentes:
+  // a etapa define as séries disponíveis e a turma (A/B) é escolhida depois.
+  // "Educação Infantil" usa os grupos configuráveis em Configurações.
+  educationLevels: [
+    {
+      value: 'infantil',
+      label: 'Educação Infantil',
+      seriesMode: 'earlyChildhoodGroups'
+    },
+    {
+      value: 'fundamental1',
+      label: 'Ensino Fundamental — Anos Iniciais',
+      series: ['1º ano', '2º ano', '3º ano', '4º ano', '5º ano']
+    },
+    {
+      value: 'fundamental2',
+      label: 'Ensino Fundamental — Anos Finais',
+      series: ['6º ano', '7º ano', '8º ano', '9º ano']
+    },
+    {
+      value: 'medio',
+      label: 'Ensino Médio',
+      series: ['1º ano', '2º ano', '3º ano']
+    }
+  ],
+
+  classOptions: ['A', 'B'],
+
+  // Opções das duas perguntas obrigatórias de abertura. O valor "na"
+  // continua o mesmo das demais perguntas para não quebrar registros já salvos.
+  openingOptions: [
+    { value: 'sim', label: 'Sim', tone: 'positive' },
+    { value: 'nao', label: 'Não', tone: 'danger' },
+    { value: 'parcial', label: 'Parcialmente', tone: 'warning' },
+    { value: 'na', label: 'Não foi possível observar', tone: 'neutral' }
+  ],
+
+  // Duas perguntas obrigatórias de abertura, com comentário curto opcional.
+  // Ficam em record.abertura, sem alterar o campo respostas já existente.
+  openingQuestions: [
+    {
+      id: 'abertura_pontualidade',
+      text: 'O professor inicia a aula no horário programado?',
+      noteLabel: 'Comentário curto (opcional)',
+      notePlaceholder: 'Ex.: início após a entrada dos estudantes.'
+    },
+    {
+      id: 'abertura_chamada',
+      text: 'O professor realiza a chamada dos alunos?',
+      noteLabel: 'Comentário curto (opcional)',
+      notePlaceholder: 'Ex.: chamada realizada no início da aula.'
+    }
+  ],
+
+  // Textos do documento curto entregue ao professor.
+  teacherReport: {
+    title: 'Observação pedagógica',
+    subtitle: '',
+    notesTitle: 'Observações para o professor',
+    notesEmpty: 'Nenhuma observação escrita para o professor foi registrada.',
+    nextStepsTitle: 'Próximos passos',
+    footerNote:
+      'Documento resumido destinado ao professor. O histórico completo permanece interno, com a equipe pedagógica.'
   },
 
   // Cada etapa tem perguntas e um campo de comentários.
@@ -247,3 +312,65 @@ window.OBSERVAEDU_CONFIG = {
     }
   ]
 };
+
+window.ObservaEduSchool = (function () {
+  'use strict';
+
+  const CONFIG = window.OBSERVAEDU_CONFIG;
+
+  function clean(value) {
+    return typeof value === 'string' ? value.trim() : '';
+  }
+
+  function levelByValue(value) {
+    return (CONFIG.educationLevels || []).find(function (level) {
+      return level.value === clean(value);
+    }) || null;
+  }
+
+  function seriesFor(etapa, earlyChildhoodGroups) {
+    const level = levelByValue(etapa);
+    if (!level) return [];
+    if (level.seriesMode === 'earlyChildhoodGroups') {
+      return Array.isArray(earlyChildhoodGroups) ? earlyChildhoodGroups.slice() : [];
+    }
+    return (level.series || []).slice();
+  }
+
+  function classesFor() {
+    return (CONFIG.classOptions || []).slice();
+  }
+
+  function isValidCombination(etapa, serie, turma, earlyChildhoodGroups) {
+    const level = levelByValue(etapa);
+    if (!level) return false;
+    const series = seriesFor(etapa, earlyChildhoodGroups);
+    if (series.indexOf(clean(serie)) < 0) return false;
+    return classesFor().indexOf(clean(turma)) >= 0;
+  }
+
+  function academicYear(isoDate) {
+    const match = /^(\d{4})/.exec(clean(isoDate));
+    return match ? match[1] : '';
+  }
+
+  function openingOptions() {
+    return CONFIG.openingOptions || CONFIG.answerOptions || [];
+  }
+
+  function openingValueIsValid(value) {
+    return openingOptions().some(function (option) {
+      return option.value === value;
+    });
+  }
+
+  return {
+    levelByValue: levelByValue,
+    seriesFor: seriesFor,
+    classesFor: classesFor,
+    isValidCombination: isValidCombination,
+    academicYear: academicYear,
+    openingOptions: openingOptions,
+    openingValueIsValid: openingValueIsValid
+  };
+})();

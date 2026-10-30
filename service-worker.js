@@ -21,7 +21,7 @@
 
 'use strict';
 
-const VERSION = '1.2.1';
+const VERSION = '2.0.0';
 const CACHE_NAME = 'observaedu-static-' + VERSION;
 
 const APP_SHELL = [
@@ -34,6 +34,7 @@ const APP_SHELL = [
   './questions.js?v=' + VERSION,
   './storage.js?v=' + VERSION,
   './analysis.js?v=' + VERSION,
+  './performance.js?v=' + VERSION,
   './report.js?v=' + VERSION,
   './auth.js?v=' + VERSION,
   './app.js?v=' + VERSION,

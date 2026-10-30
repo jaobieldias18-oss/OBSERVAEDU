@@ -26,11 +26,13 @@
   const Auth = window.ObservaEduAuth;
   const Analysis = window.ObservaEduAnalysis;
   const Report = window.ObservaEduReport;
+  const Performance = window.ObservaEduPerformance;
   const SVG_NS = 'http://www.w3.org/2000/svg';
 
-  const TOTAL_QUESTIONS = CONFIG.sections.reduce(function (total, section) {
-    return total + section.questions.length;
-  }, 0);
+  const TOTAL_QUESTIONS =
+    CONFIG.sections.reduce(function (total, section) {
+      return total + section.questions.length;
+    }, 0) + (CONFIG.openingQuestions ? CONFIG.openingQuestions.length : 0);
 
   // Títulos exibidos na barra superior em cada tela.
   const VIEW_META = {
@@ -50,6 +52,10 @@
       title: 'Relatórios',
       subtitle: 'Documentos das observações concluídas'
     },
+    performance: {
+      title: 'Desempenho dos Professores',
+      subtitle: 'Indicadores descritivos, sem ranking nem nota automática'
+    },
     report: {
       title: 'Relatório',
       subtitle: 'Visualização, revisão e impressão do documento'
@@ -62,21 +68,23 @@
 
   // Campos necessários para concluir uma observação.
   const REQUIRED_FIELDS = [
-    { key: 'professor', label: 'Nome do professor(a) observado(a)' },
+    { key: 'professor', label: 'Professor(a) observado(a)' },
     { key: 'disciplina', label: 'Disciplina' },
-    { key: 'turma', label: 'Turma ou ano escolar' },
+    { key: 'etapa', label: 'Etapa de ensino' },
+    { key: 'serie', label: 'Ano ou série' },
+    { key: 'turma', label: 'Turma' },
     { key: 'data', label: 'Data da observação' },
-    { key: 'observador', label: 'Nome do orientador(a) / observador(a)' }
+    { key: 'observador', label: 'Orientador responsável' }
   ];
 
   const STEPS = [
     { number: 1, title: 'Identificação', hint: 'Dados essenciais' },
-    { number: 2, title: 'Introdução', hint: '6 perguntas' },
+    { number: 2, title: 'Introdução', hint: 'Abertura + 6 perguntas' },
     { number: 3, title: 'Desenvolvimento', hint: '12 perguntas' },
     { number: 4, title: 'Conclusão', hint: '7 perguntas' },
     { number: 5, title: 'Complementares', hint: 'Textos opcionais' },
     { number: 6, title: 'Análise', hint: 'Revisão dos textos' },
-    { number: 7, title: 'Revisão', hint: 'Gerar relatório' }
+    { number: 7, title: 'Observações para o professor', hint: 'Texto da devolutiva' }
   ];
 
   const state = {
@@ -105,6 +113,16 @@
       to: ''
     },
     reportsSearch: '',
+
+    performanceFilters: {
+      teacherGroup: '',
+      year: '',
+      etapa: '',
+      serie: '',
+      turma: '',
+      from: '',
+      to: ''
+    },
 
     currentReportId: null,
     reportSnapshot: null
@@ -203,6 +221,31 @@
     );
   }
 
+  function createTeacherId() {
+    if (window.crypto && typeof window.crypto.randomUUID === 'function') {
+      return 'tch_' + window.crypto.randomUUID();
+    }
+    return (
+      'tch_' +
+      Date.now().toString(36) +
+      '_' +
+      Math.random().toString(36).slice(2, 9)
+    );
+  }
+
+  function accountLabel() {
+    if (!state.user) return '';
+    const metadata = state.user.user_metadata || {};
+    const name = clean(metadata.full_name) || clean(metadata.name);
+    return name || clean(state.user.email);
+  }
+
+  // Nome do observador: configuração explícita, nome da conta ou e-mail.
+  // Nunca é o nome do professor observado.
+  function effectiveObserverName() {
+    return clean(state.settings.displayName) || accountLabel();
+  }
+
   function formatDateBR(value) {
     const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(clean(value));
     if (!match) return 'Não informado';
@@ -280,9 +323,27 @@
     });
   }
 
+  function openingValue(record, questionId) {
+    const entry = record && record.abertura ? record.abertura[questionId] : null;
+    if (!entry) return '';
+    return typeof entry === 'object' ? entry.valor : entry;
+  }
+
+  function openingNote(record, questionId) {
+    const entry = record && record.abertura ? record.abertura[questionId] : null;
+    return entry && typeof entry === 'object' ? stringValue(entry.nota) : '';
+  }
+
+  function getOpeningAnsweredCount(record) {
+    if (!record) return 0;
+    return (CONFIG.openingQuestions || []).filter(function (question) {
+      return answerIsValid(openingValue(record, question.id));
+    }).length;
+  }
+
   function getAnsweredCount(record) {
     if (!record) return 0;
-    let count = 0;
+    let count = getOpeningAnsweredCount(record);
     CONFIG.sections.forEach(function (section) {
       section.questions.forEach(function (question) {
         if (answerIsValid(record.respostas && record.respostas[question.id])) {
@@ -295,11 +356,20 @@
 
   function unansweredList(record) {
     const list = [];
+    (CONFIG.openingQuestions || []).forEach(function (question) {
+      if (!answerIsValid(openingValue(record, question.id))) {
+        list.push({
+          section: { id: 'abertura', step: 2, title: 'Abertura da aula' },
+          question: question,
+          opening: true
+        });
+      }
+    });
     CONFIG.sections.forEach(function (section) {
       section.questions.forEach(function (question) {
         const value = record && record.respostas ? record.respostas[question.id] : '';
         if (!answerIsValid(value)) {
-          list.push({ section: section, question: question });
+          list.push({ section: section, question: question, opening: false });
         }
       });
     });
@@ -341,13 +411,24 @@
     if (!record) return false;
     const identificacao = record.identificacao || {};
     if (
+      clean(identificacao.professorId) ||
       clean(identificacao.professor) ||
       clean(identificacao.disciplina) ||
+      clean(identificacao.etapa) ||
+      clean(identificacao.serie) ||
       clean(identificacao.turma) ||
       clean(identificacao.data) ||
       clean(identificacao.horario) ||
       clean(identificacao.observador) ||
-      clean(identificacao.tema)
+      clean(identificacao.tema) ||
+      clean(record.observacoesProfessor)
+    ) {
+      return true;
+    }
+    if (
+      (CONFIG.openingQuestions || []).some(function (question) {
+        return openingValue(record, question.id) || openingNote(record, question.id);
+      })
     ) {
       return true;
     }
@@ -375,17 +456,22 @@
       id: createId(),
       status: 'rascunho',
       identificacao: {
+        professorId: '',
         professor: '',
         disciplina: '',
+        etapa: '',
+        serie: '',
         turma: '',
         data: '',
         horario: '',
-        observador: '',
+        observador: effectiveObserverName(),
         tema: ''
       },
+      abertura: {},
       respostas: {},
       comentarios: {},
       complementares: {},
+      observacoesProfessor: '',
       analise: null,
       createdAt: stamp,
       updatedAt: stamp
@@ -396,6 +482,9 @@
     });
     CONFIG.complementaryFields.forEach(function (field) {
       record.complementares[field.key] = '';
+    });
+    (CONFIG.openingQuestions || []).forEach(function (question) {
+      record.abertura[question.id] = { valor: '', nota: '' };
     });
     return record;
   }
@@ -417,6 +506,24 @@
     };
   }
 
+  function normalizeAbertura(raw) {
+    const source = raw && typeof raw === 'object' ? raw : {};
+    const abertura = {};
+    (CONFIG.openingQuestions || []).forEach(function (question) {
+      const entry = source[question.id];
+      if (entry && typeof entry === 'object') {
+        const value = answerIsValid(entry.valor) ? entry.valor : '';
+        abertura[question.id] = { valor: value, nota: stringValue(entry.nota) };
+      } else if (answerIsValid(entry)) {
+        // Compatibilidade com um eventual formato antigo que guardava só o valor.
+        abertura[question.id] = { valor: entry, nota: '' };
+      } else {
+        abertura[question.id] = { valor: '', nota: '' };
+      }
+    });
+    return abertura;
+  }
+
   function normalizeRecord(raw) {
     const source = raw && typeof raw === 'object' ? raw : {};
     const identification = source.identificacao && typeof source.identificacao === 'object'
@@ -435,17 +542,22 @@
       id: clean(source.id) || createId(),
       status: source.status === 'concluida' ? 'concluida' : 'rascunho',
       identificacao: {
+        professorId: stringValue(identification.professorId),
         professor: stringValue(identification.professor),
         disciplina: stringValue(identification.disciplina),
+        etapa: stringValue(identification.etapa),
+        serie: stringValue(identification.serie),
         turma: stringValue(identification.turma),
         data: stringValue(identification.data),
         horario: stringValue(identification.horario),
         observador: stringValue(identification.observador),
         tema: stringValue(identification.tema)
       },
+      abertura: normalizeAbertura(source.abertura),
       respostas: {},
       comentarios: {},
       complementares: {},
+      observacoesProfessor: stringValue(source.observacoesProfessor),
       analise: normalizeAnalysis(source.analise),
       createdAt: createdAt,
       updatedAt: updatedAt
@@ -467,13 +579,134 @@
     return Object.assign({}, source, record);
   }
 
+  function normalizeNameKey(value) {
+    return clean(value)
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase();
+  }
+
+  function normalizeTeachers(raw) {
+    const list = Array.isArray(raw) ? raw : [];
+    const result = [];
+    const ids = new Set();
+    const names = new Set();
+
+    list.forEach(function (item) {
+      const source = item && typeof item === 'object' ? item : {};
+      const name = stringValue(source.name);
+      if (!name) return;
+      const nameKey = normalizeNameKey(name);
+      let id = clean(source.id);
+      if (!id || ids.has(id)) id = createTeacherId();
+      // Ignora duplicatas de nome, mantendo o cadastro mais antigo.
+      if (names.has(nameKey)) return;
+      ids.add(id);
+      names.add(nameKey);
+      result.push({
+        id: id,
+        name: name,
+        disciplina: stringValue(source.disciplina),
+        active: source.active === false ? false : true,
+        createdAt: validIso(source.createdAt) || nowIso()
+      });
+    });
+
+    return result;
+  }
+
+  function normalizeEarlyGroups(raw) {
+    const list = Array.isArray(raw) ? raw : [];
+    const result = [];
+    const seen = new Set();
+    list.forEach(function (item) {
+      const name = stringValue(item);
+      if (!name) return;
+      const key = normalizeNameKey(name);
+      if (seen.has(key)) return;
+      seen.add(key);
+      result.push(name);
+    });
+    return result;
+  }
+
   function normalizeSettings(raw) {
     const source = raw && typeof raw === 'object' ? raw : {};
-    return {
+    return Object.assign({}, source, {
       schoolName: stringValue(source.schoolName),
       schoolUnit: stringValue(source.schoolUnit),
-      city: stringValue(source.city)
+      city: stringValue(source.city),
+      displayName: stringValue(source.displayName),
+      teachers: normalizeTeachers(source.teachers),
+      earlyChildhoodGroups: normalizeEarlyGroups(source.earlyChildhoodGroups)
+    });
+  }
+
+  function findTeacher(id) {
+    const target = clean(id);
+    if (!target) return null;
+    return (state.settings.teachers || []).find(function (teacher) {
+      return teacher.id === target;
+    }) || null;
+  }
+
+  function teacherByName(name) {
+    const key = normalizeNameKey(name);
+    if (!key) return null;
+    return (state.settings.teachers || []).find(function (teacher) {
+      return normalizeNameKey(teacher.name) === key;
+    }) || null;
+  }
+
+  function addTeacher(teacher) {
+    const name = clean(teacher && teacher.name);
+    if (!name) return { ok: false, error: 'Informe o nome do professor(a).' };
+    const existing = teacherByName(name);
+    if (existing) {
+      // Cadastro novo não reativa professor removido: a reativação é uma
+      // ação explícita do cadastro ativo.
+      return { ok: false, error: 'Já existe um professor cadastrado com esse nome.' };
+    }
+    const entry = {
+      id: createTeacherId(),
+      name: name,
+      disciplina: clean(teacher.disciplina),
+      active: true,
+      createdAt: nowIso()
     };
+    state.settings.teachers = (state.settings.teachers || []).concat(entry);
+    return { ok: true, teacher: entry };
+  }
+
+  function renameTeacher(id, values) {
+    const teacher = findTeacher(id);
+    if (!teacher) return { ok: false, error: 'Professor(a) não encontrado.' };
+    const name = clean(values && values.name);
+    if (!name) return { ok: false, error: 'Informe o nome do professor(a).' };
+    const key = normalizeNameKey(name);
+    const duplicate = (state.settings.teachers || []).some(function (item) {
+      return item.id !== id && normalizeNameKey(item.name) === key;
+    });
+    if (duplicate) {
+      return { ok: false, error: 'Já existe outro professor cadastrado com esse nome.' };
+    }
+    teacher.name = name;
+    teacher.disciplina = clean(values.disciplina);
+    return { ok: true, teacher: teacher };
+  }
+
+  function removeTeacher(id) {
+    const teacher = findTeacher(id);
+    if (!teacher) return false;
+    teacher.active = false;
+    return true;
+  }
+
+  function restoreTeacher(id) {
+    const teacher = findTeacher(id);
+    if (!teacher) return false;
+    teacher.active = true;
+    return true;
   }
 
   function dedupeRecords(records) {
@@ -783,6 +1016,8 @@
       renderHistory();
     } else if (target === 'reports') {
       renderReports();
+    } else if (target === 'performance') {
+      renderPerformance();
     } else if (target === 'settings') {
       renderSettings();
     } else if (target === 'report') {
@@ -1009,7 +1244,7 @@
     setText(
       'futureText',
       cloud
-        ? 'A versão 1.2.1 usa Supabase Auth (com cadastro público) e PostgreSQL com Row Level Security. A análise ' +
+        ? 'A versão 2.0.0 usa Supabase Auth (com cadastro público) e PostgreSQL com Row Level Security. A análise ' +
             'continua baseada em regras explícitas de JavaScript e exige revisão humana. ' +
             'Não há sincronização offline fictícia nem integração com IA.'
         : 'Esta versão foi organizada em camadas simples (configuração, armazenamento, análise, ' +
@@ -1022,7 +1257,7 @@
     if (footer) {
       footer.textContent =
         'ObservaEdu · Versão ' +
-        (CONFIG.version || '1.2.1') +
+        (CONFIG.version || '2.0.0') +
         ' · ' +
         (cloud
           ? 'Registros salvos na nuvem (Supabase).'
@@ -1148,6 +1383,104 @@
     }
   }
 
+  function openTeacherDialog(teacherId) {
+    const dialog = $('teacherDialog');
+    if (!dialog) return;
+    const teacher = teacherId ? findTeacher(teacherId) : null;
+    const idInput = $('teacherDialogId');
+    const nameInput = $('teacherDialogName');
+    const disciplineInput = $('teacherDialogDisciplina');
+    const errorBox = $('teacherDialogError');
+    const title = $('teacherDialogTitle');
+    const saveLabel = $('teacherDialogSaveLabel');
+
+    if (idInput) idInput.value = teacher ? teacher.id : '';
+    if (nameInput) nameInput.value = teacher ? teacher.name : '';
+    if (disciplineInput) disciplineInput.value = teacher ? teacher.disciplina : '';
+    if (errorBox) errorBox.textContent = '';
+    if (title) {
+      title.textContent = teacher ? 'Editar professor(a)' : 'Adicionar professor(a)';
+    }
+    if (saveLabel) saveLabel.textContent = teacher ? 'Salvar alterações' : 'Salvar professor';
+
+    if (typeof dialog.showModal === 'function') {
+      dialog.showModal();
+    } else {
+      dialog.setAttribute('open', '');
+    }
+    if (nameInput && typeof nameInput.focus === 'function') {
+      window.setTimeout(function () {
+        nameInput.focus();
+      }, 30);
+    }
+  }
+
+  function closeTeacherDialog() {
+    const dialog = $('teacherDialog');
+    if (!dialog) return;
+    if (typeof dialog.close === 'function') {
+      dialog.close();
+    } else {
+      dialog.removeAttribute('open');
+    }
+  }
+
+  async function handleTeacherDialogSubmit(event) {
+    event.preventDefault();
+    const idInput = $('teacherDialogId');
+    const nameInput = $('teacherDialogName');
+    const disciplineInput = $('teacherDialogDisciplina');
+    const errorBox = $('teacherDialogError');
+    const id = clean(idInput && idInput.value);
+    const values = {
+      name: clean(nameInput && nameInput.value),
+      disciplina: clean(disciplineInput && disciplineInput.value)
+    };
+
+    const result = id ? renameTeacher(id, values) : addTeacher(values);
+    if (!result.ok) {
+      if (errorBox) errorBox.textContent = result.error;
+      if (nameInput && typeof nameInput.focus === 'function') nameInput.focus();
+      return;
+    }
+
+    const saved = await saveSettingsToStorage();
+    closeTeacherDialog();
+
+    // Ao cadastrar a partir do formulário, já seleciona o novo professor.
+    if (!id && state.form && !clean(state.form.identificacao.professorId)) {
+      state.form.identificacao.professorId = result.teacher.id;
+      state.form.identificacao.professor = result.teacher.name;
+      if (
+        result.teacher.disciplina &&
+        !clean(state.form.identificacao.disciplina)
+      ) {
+        state.form.identificacao.disciplina = result.teacher.disciplina;
+      }
+      syncTeacherSelect(state.form);
+      const disciplineInput = $('fieldDisciplina');
+      if (disciplineInput) {
+        disciplineInput.value = state.form.identificacao.disciplina;
+      }
+      clearFieldError('professor');
+      markFormDirty();
+      updateFormChrome();
+    } else if (state.form) {
+      syncTeacherSelect(state.form);
+    }
+
+    renderSettings();
+    renderPerformance();
+    showToast(
+      saved
+        ? id
+          ? 'Professor(a) atualizado(a). As observações antigas mantêm o histórico.'
+          : 'Professor(a) cadastrado(a).'
+        : 'Cadastro atualizado(a) apenas nesta sessão: o armazenamento não confirmou a gravação.',
+      saved ? 'success' : 'error'
+    );
+  }
+
   function wireStaticEvents() {
     const menuToggle = $('menuToggle');
     const sidebarClose = $('sidebarClose');
@@ -1211,6 +1544,27 @@
       });
     }
 
+    const performanceMap = {
+      performanceTeacher: 'teacherGroup',
+      performanceYear: 'year',
+      performanceEtapa: 'etapa',
+      performanceSerie: 'serie',
+      performanceTurma: 'turma',
+      performanceFrom: 'from',
+      performanceTo: 'to'
+    };
+    Object.keys(performanceMap).forEach(function (id) {
+      const input = $(id);
+      if (!input) return;
+      input.addEventListener('change', function () {
+        state.performanceFilters[performanceMap[id]] = input.value;
+        if (id === 'performanceEtapa') {
+          state.performanceFilters.serie = '';
+        }
+        renderPerformance();
+      });
+    });
+
     const confirmOk = $('confirmOk');
     const confirmCancel = $('confirmCancel');
     const confirmDialog = $('confirmDialog');
@@ -1236,6 +1590,17 @@
     const helpOk = $('helpOk');
     if (helpClose) helpClose.addEventListener('click', closeHelpDialog);
     if (helpOk) helpOk.addEventListener('click', closeHelpDialog);
+
+    const teacherForm = $('teacherDialogForm');
+    if (teacherForm) teacherForm.addEventListener('submit', handleTeacherDialogSubmit);
+    const teacherCancel = $('teacherDialogCancel');
+    if (teacherCancel) teacherCancel.addEventListener('click', closeTeacherDialog);
+    const teacherDialog = $('teacherDialog');
+    if (teacherDialog) {
+      teacherDialog.addEventListener('click', function (event) {
+        if (event.target === teacherDialog) closeTeacherDialog();
+      });
+    }
 
     const panels = $('formStepPanels');
     if (panels) panels.addEventListener('input', handleFormInput);
@@ -1487,6 +1852,108 @@
     const target = event.target;
     if (!target) return;
 
+    if (target.dataset && target.dataset.teacherSelect !== undefined) {
+      const value = target.value;
+      if (!value) {
+        state.form.identificacao.professorId = '';
+        state.form.identificacao.professor = '';
+      } else if (value.indexOf('name:') === 0) {
+        const option = target.options[target.selectedIndex];
+        state.form.identificacao.professorId = '';
+        state.form.identificacao.professor = clean(option && option.dataset.name)
+          || value.slice(5);
+      } else {
+        const teacher = findTeacher(value);
+        state.form.identificacao.professorId = value;
+        state.form.identificacao.professor = teacher ? teacher.name : value;
+        if (teacher && teacher.disciplina && !clean(state.form.identificacao.disciplina)) {
+          state.form.identificacao.disciplina = teacher.disciplina;
+          const disciplineInput = $('fieldDisciplina');
+          if (disciplineInput) disciplineInput.value = teacher.disciplina;
+        }
+      }
+      clearFieldError('professor');
+      markFormDirty();
+      updateFormChrome();
+      return;
+    }
+
+    if (target.dataset && target.dataset.schoolSelect) {
+      const key = target.dataset.schoolSelect;
+      if (key === 'etapa') {
+        state.form.identificacao.etapa = target.value;
+        state.form.identificacao.serie = '';
+        state.form.identificacao.turma = '';
+        renderSerieOptions(target.value, '');
+        renderTurmaOptions('', false);
+        const help = $('serieHelp');
+        const level = levelByValue(target.value);
+        if (help) {
+          help.textContent =
+            level && level.seriesMode === 'earlyChildhoodGroups'
+              ? (state.settings.earlyChildhoodGroups || []).length
+                ? 'Grupos configurados em Configurações.'
+                : 'Nenhum grupo configurado. Cadastre os grupos da Educação Infantil em Configurações.'
+              : 'As opções dependem da etapa escolhida.';
+        }
+        if (level && level.seriesMode === 'earlyChildhoodGroups' &&
+            !(state.settings.earlyChildhoodGroups || []).length) {
+          showToast(
+            'Cadastre os grupos da Educação Infantil em Configurações para escolher o ano/série.',
+            'warning'
+          );
+        }
+      } else if (key === 'serie') {
+        state.form.identificacao.serie = target.value;
+        if (!target.value) {
+          state.form.identificacao.turma = '';
+        }
+        renderTurmaOptions(state.form.identificacao.turma, !!target.value);
+      } else if (key === 'turma') {
+        state.form.identificacao.turma = target.value;
+      }
+      clearFieldError(key);
+      markFormDirty();
+      updateFormChrome();
+      return;
+    }
+
+    if (target.dataset && target.dataset.opening) {
+      if (target.type === 'radio' && !target.checked) return;
+      const questionId = target.dataset.opening;
+      if (!state.form.abertura[questionId]) {
+        state.form.abertura[questionId] = { valor: '', nota: '' };
+      }
+      state.form.abertura[questionId].valor = target.value;
+
+      const card = document.querySelector('[data-question-card="' + questionId + '"]');
+      if (card) {
+        card.classList.add('is-answered');
+        card.classList.remove('is-missing');
+      }
+
+      refreshQuestionUI();
+      markFormDirty();
+      updateFormChrome();
+      return;
+    }
+
+    if (target.dataset && target.dataset.openingNote) {
+      const questionId = target.dataset.openingNote;
+      if (!state.form.abertura[questionId]) {
+        state.form.abertura[questionId] = { valor: '', nota: '' };
+      }
+      state.form.abertura[questionId].nota = target.value;
+      markFormDirty();
+      return;
+    }
+
+    if (target.dataset && target.dataset.teacherNote !== undefined) {
+      state.form.observacoesProfessor = target.value;
+      markFormDirty();
+      return;
+    }
+
     if (target.dataset && target.dataset.field) {
       const key = target.dataset.field;
       state.form.identificacao[key] = target.value;
@@ -1623,6 +2090,7 @@
     renderDashboard();
     renderHistory();
     renderReports();
+    renderPerformance();
     updateStoragePanel();
     if (state.view === 'settings') renderSettings();
     if (state.view === 'report') renderCurrentReport();
@@ -1669,7 +2137,7 @@
       el('span', null, clean(identification.disciplina) || 'Disciplina não informada')
     );
     sub.appendChild(el('span', 'recent-dot'));
-    sub.appendChild(el('span', null, clean(identification.turma) || 'Turma não informada'));
+    sub.appendChild(el('span', null, Performance.classLabel(identification)));
     body.appendChild(sub);
     item.appendChild(body);
 
@@ -1709,6 +2177,15 @@
     totalElement.textContent = String(total);
     ongoingElement.textContent = String(ongoing);
     completedElement.textContent = String(completed);
+
+    const quickTeacherCount = $('quickTeacherCount');
+    if (quickTeacherCount) {
+      const directory = teacherDirectory();
+      quickTeacherCount.textContent =
+        directory.list.length +
+        ' ' +
+        plural(directory.list.length, 'professor no diretório', 'professores no diretório');
+    }
 
     clearNode(recentList);
     const recent = sortedObservations().slice(0, 5);
@@ -1873,7 +2350,7 @@
       )
     );
     subtitle.appendChild(
-      el('span', 'record-tag', clean(identification.turma) || 'Turma não informada')
+      el('span', 'record-tag', Performance.classLabel(identification))
     );
     subtitle.appendChild(el('span', 'record-tag', formatDateBR(identification.data)));
     textWrap.appendChild(subtitle);
@@ -2078,27 +2555,1038 @@
     });
   }
 
+  /* =======================================================================
+   * 3.0 DESEMPENHO POR PROFESSOR(A)
+   * ===================================================================== */
+
+  function toneForAnswer(value) {
+    const option = CONFIG.answerOptions.find(function (item) {
+      return item.value === value;
+    });
+    return option ? option.tone : 'neutral';
+  }
+
+  function buildHorizontalBars(items, ariaLabel) {
+    const chart = el('div', 'bar-chart');
+    chart.setAttribute('role', 'img');
+    chart.setAttribute('aria-label', ariaLabel || 'Gráfico de barras');
+
+    const max = items.reduce(function (top, item) {
+      return Math.max(top, item.count);
+    }, 0);
+
+    items.forEach(function (item) {
+      const row = el('div', 'bar-row');
+      row.appendChild(el('span', 'bar-label', item.label));
+
+      const track = el('div', 'bar-track');
+      const fill = el('div', 'bar-fill bar-fill--' + (item.tone || 'neutral'));
+      fill.style.width = max ? Math.round((item.count / max) * 100) + '%' : '0%';
+      track.appendChild(fill);
+      row.appendChild(track);
+
+      const value = el(
+        'span',
+        'bar-value',
+        item.valueText !== undefined ? item.valueText : String(item.count)
+      );
+      row.appendChild(value);
+      chart.appendChild(row);
+    });
+
+    return chart;
+  }
+
+  function performanceDirectoryOptions() {
+    return teacherDirectory().list;
+  }
+
+  function syncPerformanceControls(options) {
+    const teacherSelect = $('performanceTeacher');
+    const etapaSelect = $('performanceEtapa');
+    const fromInput = $('performanceFrom');
+    const toInput = $('performanceTo');
+
+    if (teacherSelect && !(options && options.skipTeacher)) {
+      clearNode(teacherSelect);
+      const all = el('option', null, 'Todos os professores');
+      all.value = '';
+      teacherSelect.appendChild(all);
+      performanceDirectoryOptions().forEach(function (entry) {
+        const option = el(
+          'option',
+          null,
+          entry.name + (entry.active ? '' : ' (histórico)')
+        );
+        option.value = entry.groupKey;
+        teacherSelect.appendChild(option);
+      });
+      teacherSelect.value = state.performanceFilters.teacherGroup;
+      if (teacherSelect.value !== state.performanceFilters.teacherGroup) {
+        state.performanceFilters.teacherGroup = '';
+        teacherSelect.value = '';
+      }
+    }
+
+    if (etapaSelect) {
+      const current = state.performanceFilters.etapa;
+      clearNode(etapaSelect);
+      const all = el('option', null, 'Todas as etapas');
+      all.value = '';
+      etapaSelect.appendChild(all);
+      CONFIG.educationLevels.forEach(function (level) {
+        const option = el('option', null, level.label);
+        option.value = level.value;
+        etapaSelect.appendChild(option);
+      });
+      etapaSelect.value = current;
+      if (etapaSelect.value !== current) {
+        state.performanceFilters.etapa = '';
+        etapaSelect.value = '';
+      }
+    }
+
+    const yearSelect = $('performanceYear');
+    const serieSelect = $('performanceSerie');
+    const turmaSelect = $('performanceTurma');
+    const yearOptions = {};
+    state.observations.forEach(function (record) {
+      const year = Performance.academicYear(record.identificacao && record.identificacao.data);
+      if (year) yearOptions[year] = true;
+    });
+    if (yearSelect) {
+      const current = state.performanceFilters.year;
+      clearNode(yearSelect);
+      const all = el('option', null, 'Todos os anos');
+      all.value = '';
+      yearSelect.appendChild(all);
+      Object.keys(yearOptions).sort().reverse().forEach(function (year) {
+        const option = el('option', null, year);
+        option.value = year;
+        yearSelect.appendChild(option);
+      });
+      yearSelect.value = current;
+      if (yearSelect.value !== current) {
+        state.performanceFilters.year = '';
+        yearSelect.value = '';
+      }
+    }
+
+    if (serieSelect) {
+      const current = state.performanceFilters.serie;
+      const series = seriesOptionsFor(state.performanceFilters.etapa);
+      clearNode(serieSelect);
+      const all = el('option', null, state.performanceFilters.etapa ? 'Todas as séries desta etapa' : 'Todas as séries');
+      all.value = '';
+      serieSelect.appendChild(all);
+      const seen = new Set();
+      series.forEach(function (name) {
+        seen.add(name);
+        const option = el('option', null, name);
+        option.value = name;
+        serieSelect.appendChild(option);
+      });
+      state.observations.forEach(function (record) {
+        const ident = record.identificacao || {};
+        const serie = clean(ident.serie);
+        if (!serie || seen.has(serie)) return;
+        if (state.performanceFilters.etapa && clean(ident.etapa) !== state.performanceFilters.etapa) return;
+        seen.add(serie);
+        const option = el('option', null, serie);
+        option.value = serie;
+        serieSelect.appendChild(option);
+      });
+      serieSelect.value = current;
+      if (serieSelect.value !== current) {
+        state.performanceFilters.serie = '';
+        serieSelect.value = '';
+      }
+    }
+
+    if (turmaSelect) {
+      const current = state.performanceFilters.turma;
+      clearNode(turmaSelect);
+      const all = el('option', null, 'Todas as turmas');
+      all.value = '';
+      turmaSelect.appendChild(all);
+      CONFIG.classOptions.forEach(function (name) {
+        const option = el('option', null, name);
+        option.value = name;
+        turmaSelect.appendChild(option);
+      });
+      turmaSelect.value = current;
+      if (turmaSelect.value !== current) {
+        state.performanceFilters.turma = '';
+        turmaSelect.value = '';
+      }
+    }
+
+    if (fromInput) fromInput.value = state.performanceFilters.from;
+    if (toInput) toInput.value = state.performanceFilters.to;
+  }
+
+  function buildPerformanceStat(label, value, detail, tone) {
+    const card = el('div', 'performance-stat performance-stat--' + (tone || 'blue'));
+    card.appendChild(el('p', 'performance-stat-label', label));
+    card.appendChild(el('p', 'performance-stat-value', value));
+    card.appendChild(el('p', 'performance-stat-detail', detail));
+    return card;
+  }
+
+  function renderPerformanceStats(result) {
+    const container = $('performanceStats');
+    if (!container) return;
+    clearNode(container);
+
+    container.appendChild(
+      buildPerformanceStat(
+        'Observações concluídas',
+        String(result.sampleSize),
+        result.sampleSize === result.allConcludedCount
+          ? 'Todas as concluídas'
+          : 'de ' + result.allConcludedCount + ' concluídas no total',
+        'blue'
+      )
+    );
+    container.appendChild(
+      buildPerformanceStat(
+        'Professores no recorte',
+        String(result.teachersInScope),
+        result.directory.list.length + ' no diretório',
+        'gray'
+      )
+    );
+    container.appendChild(
+      buildPerformanceStat(
+        'Turmas observadas',
+        String(result.classesObserved.length),
+        result.classesObserved.length ? result.classesObserved.slice(0, 4).join(' · ') : 'Nenhuma neste recorte',
+        'amber'
+      )
+    );
+    container.appendChild(
+      buildPerformanceStat(
+        'Perguntas de abertura',
+        result.recordsWithOpening + ' de ' + result.sampleSize,
+        'Registros com pontualidade ou chamada',
+        'green'
+      )
+    );
+  }
+
+  function renderPerformanceNotice(result) {
+    const container = $('performanceNotice');
+    if (!container) return;
+    clearNode(container);
+
+    if (!result.hasData) {
+      container.appendChild(
+        buildEmptyState({
+          icon: 'i-chart',
+          title: 'Nenhuma observação concluída neste recorte',
+          text: 'Os indicadores usam apenas observações concluídas. Ajuste os filtros ou conclua uma observação.',
+          actions: [
+            {
+              label: 'Limpar filtros',
+              action: 'clear-performance-filters',
+              icon: 'i-refresh'
+            }
+          ]
+        })
+      );
+      return;
+    }
+
+    if (result.sampleSize < 5) {
+      const notice = el('div', 'card performance-notice performance-notice--warning');
+      notice.appendChild(svgIcon('i-alert'));
+      notice.appendChild(
+        el(
+          'p',
+          null,
+          'Amostra pequena: ' +
+            result.sampleSize +
+            ' ' +
+            plural(result.sampleSize, 'observação concluída', 'observações concluídas') +
+            ' no recorte. Evite conclusões sobre o desempenho de professores com poucos registros.'
+        )
+      );
+      container.appendChild(notice);
+    }
+
+    if (result.recordsWithOpening < result.sampleSize) {
+      const missing = result.sampleSize - result.recordsWithOpening;
+      const notice = el('div', 'card performance-notice');
+      notice.appendChild(svgIcon('i-info'));
+      notice.appendChild(
+        el(
+          'p',
+          null,
+          'As perguntas de abertura estão registradas em ' +
+            result.recordsWithOpening +
+            ' de ' +
+            result.sampleSize +
+            ' ' +
+            plural(result.sampleSize, 'observação', 'observações') +
+            '. ' +
+            (missing > 0
+              ? missing + ' registro(s) anterior(es) não têm essas respostas e não entram nesse indicador.'
+              : '')
+        )
+      );
+      container.appendChild(notice);
+    }
+  }
+
+  function renderSingleOpeningChart(container, item, emptyLegacyText) {
+    if (!container) return;
+    clearNode(container);
+    if (!item) {
+      container.appendChild(el('p', 'chart-empty', 'Nenhuma pergunta de abertura configurada.'));
+      return;
+    }
+    const answered = item.answered;
+    const total = item.counts.total;
+    if (!answered) {
+      container.appendChild(
+        el(
+          'p',
+          'chart-empty',
+          total
+            ? emptyLegacyText
+            : 'Não há observações concluídas neste recorte.'
+        )
+      );
+      container.appendChild(
+        el(
+          'p',
+          'chart-footnote',
+          'Denominador: 0 respostas registradas em ' + total + ' ' +
+            plural(total, 'observação concluída', 'observações concluídas') +
+            '. Respostas não observadas não são tratadas como negativas.'
+        )
+      );
+      return;
+    }
+
+    const rows = window.ObservaEduSchool.openingOptions().map(function (option) {
+      const count = item.counts[option.value] || 0;
+      const percent = Math.round((count / answered) * 100);
+      return {
+        label: option.label,
+        count: count,
+        tone: option.tone,
+        valueText: count + ' (' + percent + '%)'
+      };
+    });
+    container.appendChild(
+      buildHorizontalBars(rows, item.text + '. Denominador ' + answered + '.')
+    );
+    container.appendChild(
+      el(
+        'p',
+        'chart-footnote',
+        'Denominador: ' +
+          answered +
+          ' ' +
+          plural(answered, 'resposta registrada', 'respostas registradas') +
+          ' em ' +
+          total +
+          ' ' +
+          plural(total, 'observação concluída', 'observações concluídas') +
+          (item.counts.missing
+            ? ' · ' + item.counts.missing + ' sem essa pergunta (registros anteriores)'
+            : '') +
+          '. "Não foi possível observar" não entra como resultado negativo.'
+      )
+    );
+  }
+
+  function renderPerformanceDistribution(result) {
+    const container = $('distributionChart');
+    if (!container) return;
+    clearNode(container);
+
+    if (!result.hasData) {
+      container.appendChild(
+        el('p', 'chart-empty', 'Nenhuma observação concluída neste recorte para distribuir respostas.')
+      );
+      return;
+    }
+
+    const answered = result.totals ? result.totals.answered : 0;
+    if (!answered) {
+      container.appendChild(
+        el('p', 'chart-empty', 'Não há respostas registradas para distribuir neste recorte.')
+      );
+      container.appendChild(
+        el(
+          'p',
+          'chart-footnote',
+          'A distribuição considera apenas respostas registradas. Registros sem resposta não entram no denominador.'
+        )
+      );
+      return;
+    }
+
+    const items = [];
+    (CONFIG.answerOptions || []).forEach(function (option) {
+      const count = result.totals ? result.totals[option.value] || 0 : 0;
+      items.push({
+        label: option.label,
+        count: count,
+        tone: option.tone,
+        valueText: count + ' (' + Math.round((count / answered) * 100) + '%)'
+      });
+    });
+
+    container.appendChild(
+      buildHorizontalBars(
+        items,
+        'Distribuição de respostas. Denominador: ' + answered + ' respostas registradas.'
+      )
+    );
+
+    container.appendChild(
+      el(
+        'p',
+        'chart-footnote',
+        'Amostra: ' +
+          result.sampleSize +
+          ' ' +
+          plural(result.sampleSize, 'observação concluída', 'observações concluídas') +
+          ' no recorte. Percentuais calculados sobre ' +
+          answered +
+          ' ' +
+          plural(answered, 'resposta registrada', 'respostas registradas') +
+          '. "Não observado / Não se aplica" não é tratado como resposta negativa.'
+      )
+    );
+  }
+
+  function renderMonthlyChart(result) {
+    const container = $('monthlyChart');
+    if (!container) return;
+    clearNode(container);
+
+    if (!result.monthly.length) {
+      container.appendChild(
+        el('p', 'chart-empty', 'Não há datas válidas para distribuir as observações por mês.')
+      );
+      return;
+    }
+
+    const max = result.monthly.reduce(function (top, month) {
+      return Math.max(top, month.count);
+    }, 0);
+
+    const chart = el('div', 'column-chart');
+    chart.setAttribute('role', 'img');
+    chart.setAttribute(
+      'aria-label',
+      'Observações concluídas por mês: ' +
+        result.monthly
+          .map(function (month) {
+            return month.label + ' ' + month.count;
+          })
+          .join(', ')
+    );
+
+    result.monthly.forEach(function (month) {
+      const column = el('div', 'column');
+      const value = el('span', 'column-value', String(month.count));
+      const barWrap = el('div', 'column-bar-wrap');
+      const bar = el('div', 'column-bar');
+      bar.style.height = max ? Math.max(2, Math.round((month.count / max) * 100)) + '%' : '2%';
+      barWrap.appendChild(bar);
+      column.appendChild(value);
+      column.appendChild(barWrap);
+      column.appendChild(el('span', 'column-label', month.label));
+      chart.appendChild(column);
+    });
+
+    container.appendChild(chart);
+
+    const table = el('table', 'data-table data-table--compact');
+    const thead = el('thead');
+    const headRow = el('tr');
+    ['Mês', 'Observações', 'Indicadores'].forEach(function (label) {
+      headRow.appendChild(el('th', null, label));
+    });
+    thead.appendChild(headRow);
+    table.appendChild(thead);
+    const tbody = el('tbody');
+    result.monthly.forEach(function (month) {
+      const row = el('tr');
+      row.appendChild(el('td', null, month.label));
+      row.appendChild(el('td', null, String(month.count)));
+      row.appendChild(
+        el(
+          'td',
+          null,
+          month.trendEligible
+            ? 'Pontualidade Sim ' +
+              month.pontualidadeSim +
+              '/' +
+              month.pontualidadeAnswered +
+              ' · Chamada Sim ' +
+              month.chamadaSim +
+              '/' +
+              month.chamadaAnswered
+            : month.count
+              ? 'Menos de 3 registros — tendência não exibida'
+              : 'Sem registros'
+        )
+      );
+      tbody.appendChild(row);
+    });
+    table.appendChild(tbody);
+    container.appendChild(table);
+
+    container.appendChild(
+      el(
+        'p',
+        'chart-footnote',
+        'Total: ' +
+          result.sampleSize +
+          ' ' +
+          plural(result.sampleSize, 'observação concluída', 'observações concluídas') +
+          '. Tendência mensal somente com 3 ou mais registros no mês' +
+          (result.missingDate
+            ? ' · ' + result.missingDate + ' sem data válida'
+            : '') +
+          '.'
+      )
+    );
+  }
+
+  function renderAnnualChart(result) {
+    const container = $('annualChart');
+    if (!container) return;
+    clearNode(container);
+
+    const annual = (result && result.annual) || [];
+    if (!annual.length) {
+      container.appendChild(
+        el('p', 'chart-empty', 'Não há observações concluídas para acompanhar por ano letivo neste recorte.')
+      );
+      return;
+    }
+
+    const max = annual.reduce(function (top, item) {
+      return Math.max(top, item.count);
+    }, 0);
+
+    const chart = el('div', 'column-chart');
+    chart.setAttribute('role', 'img');
+    chart.setAttribute(
+      'aria-label',
+      'Observações concluídas por ano letivo: ' +
+        annual.map(function (item) {
+          return item.year + ' ' + item.count;
+        }).join(', ')
+    );
+
+    annual.forEach(function (item) {
+      const column = el('div', 'column');
+      const value = el('span', 'column-value', String(item.count));
+      const barWrap = el('div', 'column-bar-wrap');
+      const bar = el('div', 'column-bar');
+      bar.style.height = max ? Math.max(2, Math.round((item.count / max) * 100)) + '%' : '2%';
+      barWrap.appendChild(bar);
+      column.appendChild(value);
+      column.appendChild(barWrap);
+      column.appendChild(el('span', 'column-label', item.year));
+      chart.appendChild(column);
+    });
+
+    container.appendChild(chart);
+
+    const total = annual.reduce(function (top, item) {
+      return top + item.count;
+    }, 0);
+    container.appendChild(
+      el(
+        'p',
+        'chart-footnote',
+        'Total no recorte: ' +
+          total +
+          ' ' +
+          plural(total, 'observação concluída', 'observações concluídas') +
+          '. Evolução anual com base em anos letivos identificados nas datas das observações.'
+      )
+    );
+  }
+
+  function renderPerformanceTable(result) {
+    const container = $('performanceTeacherTable');
+    if (!container) return;
+    clearNode(container);
+
+    if (!result.perTeacher.length) {
+      container.appendChild(
+        el('p', 'chart-empty', 'Nenhum professor no diretório ou no recorte selecionado.')
+      );
+      return;
+    }
+
+    const wrap = el('div', 'data-table-wrap');
+    const table = el('table', 'data-table');
+    const caption = el('caption', 'sr-only', 'Resumo descritivo por professor, sem ranking');
+    table.appendChild(caption);
+
+    const thead = el('thead');
+    const headRow = el('tr');
+    ['Professor', 'Observações', 'Turmas observadas', 'Última observação', 'Pontualidade', 'Chamada', ''].forEach(
+      function (label) {
+        headRow.appendChild(el('th', null, label));
+      }
+    );
+    thead.appendChild(headRow);
+    table.appendChild(thead);
+
+    const tbody = el('tbody');
+    result.perTeacher.forEach(function (row) {
+      const tr = el('tr');
+      if (row.active === false) tr.className = 'is-history';
+
+      const nameCell = el('td');
+      nameCell.appendChild(el('strong', null, row.name));
+      if (row.active === false) {
+        nameCell.appendChild(el('span', 'badge badge--neutral', 'Fora do cadastro'));
+      }
+      if (row.lowSample) {
+        nameCell.appendChild(el('span', 'badge badge--warning', 'Amostra pequena'));
+      }
+      tr.appendChild(nameCell);
+
+      tr.appendChild(
+        el(
+          'td',
+          null,
+          row.count + ' ' + plural(row.count, 'concluída', 'concluídas')
+        )
+      );
+      tr.appendChild(
+        el('td', null, row.classes && row.classes.length ? row.classes.join(', ') : '—')
+      );
+      tr.appendChild(el('td', null, row.lastDate ? formatDateBR(row.lastDate) : '—'));
+      tr.appendChild(
+        el(
+          'td',
+          null,
+          row.opening.pontualidade.answered
+            ? row.opening.pontualidade.sim + ' Sim / ' + row.opening.pontualidade.answered
+            : 'Sem dado'
+        )
+      );
+      tr.appendChild(
+        el(
+          'td',
+          null,
+          row.opening.chamada.answered
+            ? row.opening.chamada.sim + ' Sim / ' + row.opening.chamada.answered
+            : 'Sem dado'
+        )
+      );
+
+      const actionCell = el('td', 'data-table-action');
+      if (row.count) {
+        actionCell.appendChild(
+          makeButton(
+            'Histórico',
+            'select-teacher',
+            { key: row.groupKey },
+            'btn-ghost btn-sm',
+            'i-history'
+          )
+        );
+      }
+      tr.appendChild(actionCell);
+
+      tbody.appendChild(tr);
+    });
+    table.appendChild(tbody);
+    wrap.appendChild(table);
+    container.appendChild(wrap);
+    container.appendChild(
+      el(
+        'p',
+        'chart-footnote',
+        'Os números são contagens descritivas dos registros concluídos. Não há nota, média de desempenho nem classificação.'
+      )
+    );
+  }
+
+  function renderTeacherHistory(result) {
+    const container = $('teacherHistory');
+    if (!container) return;
+    clearNode(container);
+
+    const groupKey = state.performanceFilters.teacherGroup;
+    if (!groupKey) {
+      container.appendChild(
+        el(
+          'p',
+          'chart-empty',
+          'Selecione um professor(a) no filtro ou na tabela para ver o histórico individual.'
+        )
+      );
+      return;
+    }
+
+    const entry = result.directory.list.find(function (item) {
+      return item.groupKey === groupKey;
+    });
+    const history = Performance.teacherHistory(
+      state.observations,
+      result.directory,
+      groupKey,
+      {
+        etapa: state.performanceFilters.etapa,
+        serie: state.performanceFilters.serie,
+        turma: state.performanceFilters.turma,
+        year: state.performanceFilters.year,
+        from: state.performanceFilters.from,
+        to: state.performanceFilters.to
+      }
+    );
+
+    const summary = el('div', 'teacher-history-summary');
+    summary.appendChild(
+      el(
+        'p',
+        null,
+        (entry ? entry.name : 'Professor(a)') +
+          ' · ' +
+          history.total +
+          ' ' +
+          plural(history.total, 'registro', 'registros') +
+          ' (' +
+          history.concluded +
+          ' concluído(s), ' +
+          history.drafts +
+          ' em andamento)'
+      )
+    );
+    container.appendChild(summary);
+
+    if (!history.records.length) {
+      container.appendChild(
+        el('p', 'chart-empty', 'Nenhuma observação encontrada para este professor no recorte.')
+      );
+      return;
+    }
+
+    const list = el('div', 'records-list');
+    history.records.forEach(function (record) {
+      list.appendChild(buildRecordCard(record, 'reports'));
+    });
+    container.appendChild(list);
+  }
+
+  function renderPerformance() {
+    const view = $('view-performance');
+    if (!view) return;
+
+    syncPerformanceControls();
+    const result = Performance.compute(
+      state.observations,
+      state.settings,
+      state.performanceFilters
+    );
+
+    const count = $('performanceCount');
+    if (count) {
+      count.textContent =
+        result.sampleSize +
+        ' ' +
+        plural(result.sampleSize, 'observação concluída', 'observações concluídas') +
+        ' no recorte';
+    }
+
+    renderPerformanceNotice(result);
+    renderPerformanceStats(result);
+    renderSingleOpeningChart(
+      $('punctualityChart'),
+      result.openingById.abertura_pontualidade,
+      'As observações deste recorte não têm a pergunta de pontualidade. Valores não foram inventados.'
+    );
+    renderSingleOpeningChart(
+      $('attendanceChart'),
+      result.openingById.abertura_chamada,
+      'As observações deste recorte não têm a pergunta de chamada. Valores não foram inventados.'
+    );
+    renderPerformanceDistribution(result);
+    renderMonthlyChart(result);
+    renderAnnualChart(result);
+    renderPerformanceTable(result);
+    renderTeacherHistory(result);
+  }
+
+  function resetPerformanceFilters() {
+    state.performanceFilters = {
+      teacherGroup: '',
+      year: '',
+      etapa: '',
+      serie: '',
+      turma: '',
+      from: '',
+      to: ''
+    };
+    syncPerformanceControls();
+    renderPerformance();
+  }
+
+  async function handleAddEarlyGroup() {
+    const input = $('earlyGroupInput');
+    if (!input) return;
+    const name = clean(input.value);
+    if (!name) {
+      showToast('Informe o nome do grupo da Educação Infantil.', 'warning');
+      input.focus();
+      return;
+    }
+    const exists = (state.settings.earlyChildhoodGroups || []).some(function (item) {
+      return normalizeNameKey(item) === normalizeNameKey(name);
+    });
+    if (exists) {
+      showToast('Esse grupo já está cadastrado.', 'warning');
+      return;
+    }
+    state.settings.earlyChildhoodGroups = (state.settings.earlyChildhoodGroups || []).concat(name);
+    input.value = '';
+    const saved = await saveSettingsToStorage();
+    renderSettings();
+    if (state.form) {
+      syncSchoolSelects(state.form);
+    }
+    showToast(
+      saved ? 'Grupo adicionado.' : 'Grupo adicionado apenas nesta sessão.',
+      saved ? 'success' : 'error'
+    );
+  }
+
+  async function handleRemoveEarlyGroup(name) {
+    const target = clean(name);
+    if (!target) return;
+    const confirmed = await askConfirm({
+      title: 'Remover grupo',
+      message:
+        'Remover o grupo "' +
+        target +
+        '" do seletor da Educação Infantil? As observações já registradas não serão alteradas.',
+      confirmLabel: 'Remover grupo',
+      danger: true
+    });
+    if (!confirmed) return;
+
+    state.settings.earlyChildhoodGroups = (state.settings.earlyChildhoodGroups || []).filter(
+      function (item) {
+        return normalizeNameKey(item) !== normalizeNameKey(target);
+      }
+    );
+    const saved = await saveSettingsToStorage();
+    renderSettings();
+    if (state.form) {
+      syncSchoolSelects(state.form);
+    }
+    showToast(
+      saved ? 'Grupo removido.' : 'Grupo removido apenas nesta sessão.',
+      saved ? 'success' : 'error'
+    );
+  }
+
+  async function handleRemoveTeacher(id) {
+    const teacher = findTeacher(id);
+    if (!teacher) return;
+    const confirmed = await askConfirm({
+      title: 'Remover professor(a)',
+      message:
+        'Remover "' +
+        teacher.name +
+        '" da lista ativa? O identificador e o histórico de observações são preservados. Nenhum registro será apagado.',
+      confirmLabel: 'Remover da lista ativa',
+      danger: true
+    });
+    if (!confirmed) return;
+
+    removeTeacher(id);
+    const saved = await saveSettingsToStorage();
+    renderSettings();
+    if (state.form) syncTeacherSelect(state.form);
+    renderPerformance();
+    showToast(
+      saved
+        ? 'Professor removido da lista ativa. O histórico foi preservado.'
+        : 'Remoção aplicada apenas nesta sessão: o armazenamento não confirmou a gravação.',
+      saved ? 'success' : 'error'
+    );
+  }
+
+  async function handleRestoreTeacher(id) {
+    if (!restoreTeacher(id)) return;
+    const saved = await saveSettingsToStorage();
+    renderSettings();
+    if (state.form) syncTeacherSelect(state.form);
+    renderPerformance();
+    showToast(
+      saved ? 'Professor reativado na lista.' : 'Reativação aplicada apenas nesta sessão.',
+      saved ? 'success' : 'error'
+    );
+  }
+
   function renderSettings() {
     const nameInput = $('settingsSchoolName');
     const unitInput = $('settingsSchoolUnit');
     const cityInput = $('settingsCity');
+    const displayNameInput = $('settingsDisplayName');
     if (!nameInput || !unitInput || !cityInput) return;
 
     nameInput.value = state.settings.schoolName || '';
     unitInput.value = state.settings.schoolUnit || '';
     cityInput.value = state.settings.city || '';
+    if (displayNameInput) {
+      displayNameInput.value = state.settings.displayName || accountLabel();
+    }
 
+    renderTeacherList();
+    renderEarlyGroups();
     renderSidebarSchool();
     updateStoragePanel();
   }
 
+  function renderTeacherList() {
+    const list = $('teacherList');
+    const count = $('teacherCount');
+    if (!list) return;
+    clearNode(list);
+    const teachers = state.settings.teachers || [];
+    const activeCount = teachers.filter(function (teacher) {
+      return teacher.active !== false;
+    }).length;
+
+    if (count) {
+      count.textContent =
+        activeCount +
+        ' ' +
+        plural(activeCount, 'ativo', 'ativos') +
+        ' · ' +
+        teachers.length +
+        ' no cadastro';
+    }
+
+    if (!teachers.length) {
+      list.appendChild(
+        buildEmptyState({
+          icon: 'i-users',
+          title: 'Nenhum professor cadastrado',
+          text: 'Cadastre os professores para manter um identificador estável e acompanhar o histórico.',
+          actions: [
+            {
+              label: 'Adicionar professor',
+              action: 'add-teacher',
+              primary: true,
+              icon: 'i-plus'
+            }
+          ]
+        })
+      );
+      return;
+    }
+
+    teachers.forEach(function (teacher) {
+      const row = el('div', 'teacher-row');
+      row.appendChild(el('span', 'person-avatar', initials(teacher.name)));
+
+      const body = el('div', 'teacher-row-body');
+      body.appendChild(el('p', 'teacher-row-name', teacher.name));
+      body.appendChild(
+        el(
+          'p',
+          'teacher-row-meta',
+          (clean(teacher.disciplina) || 'Disciplina não informada') +
+            (teacher.active === false ? ' · Fora da lista ativa' : '')
+        )
+      );
+      row.appendChild(body);
+      if (teacher.active === false) row.classList.add('is-inactive');
+
+      const actions = el('div', 'teacher-row-actions');
+      const edit = makeButton(
+        'Editar',
+        'edit-teacher',
+        { id: teacher.id },
+        'btn-secondary btn-sm',
+        'i-edit'
+      );
+      edit.setAttribute('aria-label', 'Editar ' + teacher.name);
+      actions.appendChild(edit);
+      if (teacher.active === false) {
+        const restore = makeButton(
+          'Reativar',
+          'restore-teacher',
+          { id: teacher.id },
+          'btn-secondary btn-sm',
+          'i-refresh'
+        );
+        restore.setAttribute('aria-label', 'Reativar ' + teacher.name);
+        actions.appendChild(restore);
+      } else {
+        const remove = makeButton(
+          'Remover',
+          'remove-teacher',
+          { id: teacher.id },
+          'btn-danger-outline btn-sm',
+          'i-trash'
+        );
+        remove.setAttribute('aria-label', 'Remover ' + teacher.name);
+        actions.appendChild(remove);
+      }
+      row.appendChild(actions);
+
+      list.appendChild(row);
+    });
+  }
+
+  function renderEarlyGroups() {
+    const list = $('earlyGroupList');
+    if (!list) return;
+    clearNode(list);
+    const groups = state.settings.earlyChildhoodGroups || [];
+
+    if (!groups.length) {
+      list.appendChild(
+        el('p', 'field-help', 'Nenhum grupo cadastrado. A Educação Infantil ficará indisponível no formulário até que ao menos um grupo seja adicionado.')
+      );
+      return;
+    }
+
+    groups.forEach(function (name) {
+      const tag = el('span', 'tag');
+      tag.appendChild(el('span', null, name));
+      const remove = el('button', 'tag-remove');
+      remove.type = 'button';
+      remove.dataset.action = 'remove-early-group';
+      remove.dataset.name = name;
+      remove.setAttribute('aria-label', 'Remover grupo ' + name);
+      remove.textContent = '\u00d7';
+      tag.appendChild(remove);
+      list.appendChild(tag);
+    });
+  }
+
   async function handleSettingsSubmit(event) {
     event.preventDefault();
-    state.settings = normalizeSettings({
-      schoolName: clean($('settingsSchoolName').value),
-      schoolUnit: clean($('settingsSchoolUnit').value),
-      city: clean($('settingsCity').value)
-    });
+    const displayName = clean($('settingsDisplayName') ? $('settingsDisplayName').value : '');
+    state.settings = normalizeSettings(
+      Object.assign({}, state.settings, {
+        schoolName: clean($('settingsSchoolName').value),
+        schoolUnit: clean($('settingsSchoolUnit').value),
+        city: clean($('settingsCity').value),
+        displayName: displayName
+      })
+    );
     const saved = await saveSettingsToStorage();
     renderSidebarSchool();
     renderSettings();
@@ -2106,8 +3594,8 @@
     if (saved) {
       showToast(
         state.mode === 'cloud'
-          ? 'Configurações salvas no servidor. A identificação da escola será usada nos relatórios.'
-          : 'Configurações salvas. A identificação da escola será usada nos próximos relatórios.',
+          ? 'Configurações salvas no servidor. A identificação da escola e o nome do observador serão usados nos próximos registros.'
+          : 'Configurações salvas. A identificação da escola e o nome do observador serão usados nos próximos registros.',
         'success'
       );
       return;
@@ -2508,7 +3996,7 @@
       const section = CONFIG.sections.find(function (item) {
         return item.step === step.number;
       });
-      const hint = section ? section.questions.length + ' perguntas' : step.hint;
+      const hint = section ? (step.number === 2 ? step.hint : section.questions.length + ' perguntas') : step.hint;
 
       const button = el('button', 'step-button');
       button.type = 'button';
@@ -2522,6 +4010,91 @@
       button.appendChild(text);
       container.appendChild(button);
     });
+  }
+
+  function buildOpeningQuestions(panel) {
+    const questions = CONFIG.openingQuestions || [];
+    if (!questions.length) return;
+
+    const heading = el('div', 'section-heading');
+    const headingText = el('div');
+    headingText.appendChild(el('p', 'eyebrow', 'Abertura'));
+    headingText.appendChild(el('h2', 'section-title', 'Início da aula'));
+    headingText.appendChild(
+      el(
+        'p',
+        'section-description',
+        'Duas perguntas obrigatórias sobre o começo da aula. A observação curta é opcional.'
+      )
+    );
+    heading.appendChild(headingText);
+    panel.appendChild(heading);
+
+    const card = el('div', 'card form-card opening-card-list');
+
+    const header = el('div', 'question-section-heading');
+    const headerText = el('div');
+    headerText.appendChild(el('h3', null, 'Abertura — ' + questions.length + ' perguntas obrigatórias'));
+    headerText.appendChild(
+      el('p', null, '"Não foi possível observar" não é tratado como resposta negativa.')
+    );
+    header.appendChild(headerText);
+    const counter = el('span', 'answered-count', '0/' + questions.length + ' respondidas');
+    counter.dataset.count = 'abertura';
+    header.appendChild(counter);
+    card.appendChild(header);
+
+    questions.forEach(function (question, index) {
+      const questionCard = el('div', 'question-card opening-question-card');
+      questionCard.dataset.questionCard = question.id;
+      questionCard.dataset.openingCard = question.id;
+
+      const questionHeader = el('div', 'question-header');
+      questionHeader.appendChild(el('span', 'question-number', 'A' + (index + 1)));
+      questionHeader.appendChild(el('p', 'question-text', question.text));
+      questionCard.appendChild(questionHeader);
+
+      const answers = el('div', 'answers');
+      answers.setAttribute('role', 'radiogroup');
+      answers.setAttribute('aria-label', question.text);
+
+      (window.ObservaEduSchool.openingOptions()).forEach(function (option) {
+        const label = el('label', 'answer-option');
+        label.dataset.tone = option.tone;
+
+        const input = el('input');
+        input.type = 'radio';
+        input.name = 'opening_' + question.id;
+        input.value = option.value;
+        input.id = 'opening_' + question.id + '_' + option.value;
+        input.dataset.opening = question.id;
+        input.setAttribute('aria-label', option.label + ' — ' + question.text);
+
+        label.appendChild(input);
+        label.appendChild(el('span', 'answer-pill', option.label));
+        answers.appendChild(label);
+      });
+
+      questionCard.appendChild(answers);
+
+      const noteField = el('div', 'field opening-note-field');
+      const noteId = 'opening_note_' + question.id;
+      const noteLabel = el('label', null, question.noteLabel || 'Observação curta (opcional)');
+      noteLabel.htmlFor = noteId;
+      const note = el('textarea');
+      note.id = noteId;
+      note.rows = 2;
+      note.maxLength = 500;
+      note.dataset.openingNote = question.id;
+      note.placeholder = question.notePlaceholder || '';
+      noteField.appendChild(noteLabel);
+      noteField.appendChild(note);
+      questionCard.appendChild(noteField);
+
+      card.appendChild(questionCard);
+    });
+
+    panel.appendChild(card);
   }
 
   function buildQuestionSection(section) {
@@ -2538,6 +4111,8 @@
     headingText.appendChild(el('p', 'section-description', section.description));
     heading.appendChild(headingText);
     panel.appendChild(heading);
+
+    if (section.step === 2) buildOpeningQuestions(panel);
 
     const card = el('div', 'card form-card');
 
@@ -2676,6 +4251,196 @@
     });
   }
 
+  function teacherDirectory() {
+    return Performance.buildDirectory(state.settings.teachers, state.observations);
+  }
+
+  function teacherSelectionValue(entry) {
+    if (entry.id) return entry.id;
+    return 'name:' + entry.name;
+  }
+
+  function syncTeacherSelect(record) {
+    const select = $('fieldProfessor');
+    if (!select) return;
+    const identification = (record && record.identificacao) || {};
+    const currentId = clean(identification.professorId);
+    const currentName = clean(identification.professor);
+    const directory = teacherDirectory();
+
+    clearNode(select);
+    const placeholder = el('option', null, 'Selecione um professor(a)');
+    placeholder.value = '';
+    select.appendChild(placeholder);
+
+    const seen = new Set();
+    directory.list.forEach(function (entry) {
+      if (seen.has(entry.groupKey)) return;
+      const isCurrent =
+        (currentId && entry.id === currentId) ||
+        (currentName && normalizeNameKey(entry.name) === normalizeNameKey(currentName));
+      if (!entry.active && !isCurrent) return;
+      seen.add(entry.groupKey);
+      const option = el(
+        'option',
+        null,
+        entry.name + (entry.active ? '' : ' (histórico)')
+      );
+      option.value = teacherSelectionValue(entry);
+      option.dataset.name = entry.name;
+      option.dataset.disciplina = entry.disciplina || '';
+      select.appendChild(option);
+    });
+
+    // Rascunho antigo com nome livre ainda não presente no diretório.
+    if (
+      currentName &&
+      !directory.list.some(function (entry) {
+        return normalizeNameKey(entry.name) === normalizeNameKey(currentName);
+      })
+    ) {
+      const legacy = el('option', null, currentName + ' (não cadastrado)');
+      legacy.value = 'name:' + currentName;
+      legacy.dataset.name = currentName;
+      legacy.dataset.disciplina = clean(identification.disciplina);
+      select.appendChild(legacy);
+    }
+
+    let target = '';
+    if (currentId && findTeacher(currentId)) {
+      target = currentId;
+    } else if (currentId && directory.byId.has(currentId)) {
+      target = currentId;
+    } else if (currentName) {
+      const match = directory.list.find(function (entry) {
+        return normalizeNameKey(entry.name) === normalizeNameKey(currentName);
+      });
+      target = match ? teacherSelectionValue(match) : 'name:' + currentName;
+    }
+    select.value = target;
+  }
+
+  function levelByValue(value) {
+    return CONFIG.educationLevels.find(function (level) {
+      return level.value === clean(value);
+    }) || null;
+  }
+
+  function seriesOptionsFor(etapa) {
+    const level = levelByValue(etapa);
+    if (!level) return [];
+    if (level.seriesMode === 'earlyChildhoodGroups') {
+      return (state.settings.earlyChildhoodGroups || []).slice();
+    }
+    return (level.series || []).slice();
+  }
+
+  function renderSerieOptions(etapa, selectedSerie) {
+    const select = $('fieldSerie');
+    if (!select) return;
+    clearNode(select);
+
+    const level = levelByValue(etapa);
+    const placeholder = el('option');
+    placeholder.value = '';
+
+    if (!level) {
+      placeholder.textContent = 'Selecione a etapa primeiro';
+      select.appendChild(placeholder);
+      select.disabled = true;
+      return;
+    }
+
+    if (level.seriesMode === 'earlyChildhoodGroups') {
+      const groups = state.settings.earlyChildhoodGroups || [];
+      if (!groups.length) {
+        placeholder.textContent = 'Configure os grupos da Educação Infantil';
+        select.appendChild(placeholder);
+        select.disabled = true;
+        return;
+      }
+      placeholder.textContent = 'Selecione o grupo';
+    } else {
+      placeholder.textContent = 'Selecione o ano/série';
+    }
+
+    select.appendChild(placeholder);
+    select.disabled = false;
+    const options = seriesOptionsFor(etapa);
+    options.forEach(function (name) {
+      const option = el('option', null, name);
+      option.value = name;
+      select.appendChild(option);
+    });
+    const selected = clean(selectedSerie);
+    if (selected && options.indexOf(selected) < 0) {
+      const legacy = el('option', null, selected + ' (registro anterior)');
+      legacy.value = selected;
+      select.appendChild(legacy);
+    }
+    select.value = selected || '';
+  }
+
+  function renderTurmaOptions(selectedTurma, hasSerie) {
+    const select = $('fieldTurma');
+    if (!select) return;
+    clearNode(select);
+    const selected = clean(selectedTurma);
+    const placeholder = el('option', null, hasSerie || selected ? 'Selecione a turma' : 'Selecione a série primeiro');
+    placeholder.value = '';
+    select.appendChild(placeholder);
+    CONFIG.classOptions.forEach(function (name) {
+      const option = el('option', null, name);
+      option.value = name;
+      select.appendChild(option);
+    });
+    if (selected && CONFIG.classOptions.indexOf(selected) < 0) {
+      const legacy = el('option', null, selected + ' (registro anterior)');
+      legacy.value = selected;
+      select.appendChild(legacy);
+    }
+    select.disabled = !(hasSerie || selected);
+    select.value = selected;
+  }
+
+  function syncSchoolSelects(record) {
+    const etapaSelect = $('fieldEtapa');
+    if (!etapaSelect) return;
+    const identification = (record && record.identificacao) || {};
+
+    clearNode(etapaSelect);
+    const placeholder = el('option', null, 'Selecione a etapa');
+    placeholder.value = '';
+    etapaSelect.appendChild(placeholder);
+    CONFIG.educationLevels.forEach(function (level) {
+      const option = el('option', null, level.label);
+      option.value = level.value;
+      etapaSelect.appendChild(option);
+    });
+
+    const etapa = clean(identification.etapa);
+    if (etapa && !levelByValue(etapa)) {
+      const legacyEtapa = el('option', null, etapa + ' (registro anterior)');
+      legacyEtapa.value = etapa;
+      etapaSelect.appendChild(legacyEtapa);
+    }
+    etapaSelect.value = etapa;
+    renderSerieOptions(etapaSelect.value, identification.serie);
+    renderTurmaOptions(identification.turma, !!clean(identification.serie));
+
+    const help = $('serieHelp');
+    if (help) {
+      const level = levelByValue(etapaSelect.value);
+      if (level && level.seriesMode === 'earlyChildhoodGroups') {
+        help.textContent = (state.settings.earlyChildhoodGroups || []).length
+          ? 'Grupos configurados em Configurações.'
+          : 'Nenhum grupo configurado. Cadastre os grupos da Educação Infantil em Configurações.';
+      } else {
+        help.textContent = 'As opções dependem da etapa escolhida.';
+      }
+    }
+  }
+
   function fillFormFromState() {
     if (!state.form) return;
     const record = state.form;
@@ -2683,6 +4448,31 @@
     document.querySelectorAll('[data-field]').forEach(function (input) {
       input.value = stringValue(record.identificacao[input.dataset.field]);
     });
+
+    // O observador é sempre quem está usando a conta, nunca o professor.
+    if (!clean(record.identificacao.observador)) {
+      record.identificacao.observador = effectiveObserverName();
+    }
+    const observerInput = $('fieldObservador');
+    if (observerInput) observerInput.value = record.identificacao.observador;
+
+    syncTeacherSelect(record);
+    syncSchoolSelects(record);
+
+    document.querySelectorAll('[data-opening]').forEach(function (input) {
+      input.checked = openingValue(record, input.dataset.opening) === input.value;
+    });
+    document.querySelectorAll('[data-opening-note]').forEach(function (textarea) {
+      textarea.value = openingNote(record, textarea.dataset.openingNote);
+    });
+    (CONFIG.openingQuestions || []).forEach(function (question) {
+      if (!record.abertura[question.id]) {
+        record.abertura[question.id] = { valor: '', nota: '' };
+      }
+    });
+
+    const teacherNote = $('fieldObservacoesProfessor');
+    if (teacherNote) teacherNote.value = stringValue(record.observacoesProfessor);
 
     document.querySelectorAll('[data-question]').forEach(function (input) {
       input.checked = record.respostas[input.dataset.question] === input.value;
@@ -2709,6 +4499,23 @@
 
   function refreshQuestionUI() {
     if (!state.form) return;
+    const openingQuestions = CONFIG.openingQuestions || [];
+    let openingAnswered = 0;
+    openingQuestions.forEach(function (question) {
+      const value = openingValue(state.form, question.id);
+      if (answerIsValid(value)) openingAnswered += 1;
+      const card = document.querySelector(
+        '[data-question-card="' + question.id + '"]'
+      );
+      if (card) card.classList.toggle('is-answered', answerIsValid(value));
+    });
+
+    const openingCounter = document.querySelector('[data-count="abertura"]');
+    if (openingCounter) {
+      openingCounter.textContent =
+        openingAnswered + '/' + openingQuestions.length + ' respondidas';
+    }
+
     CONFIG.sections.forEach(function (section) {
       let answered = 0;
       section.questions.forEach(function (question) {
@@ -2737,6 +4544,22 @@
       return missingRequiredFields(record).length === 0;
     }
 
+    if (step === 2) {
+      const openingComplete = (CONFIG.openingQuestions || []).every(function (question) {
+        return answerIsValid(openingValue(record, question.id));
+      });
+      const section = CONFIG.sections.find(function (item) {
+        return item.step === 2;
+      });
+      return (
+        openingComplete &&
+        (!section ||
+          section.questions.every(function (question) {
+            return answerIsValid(record.respostas[question.id]);
+          }))
+      );
+    }
+
     const section = CONFIG.sections.find(function (item) {
       return item.step === step;
     });
@@ -2763,6 +4586,24 @@
       return missing
         ? missing + ' ' + plural(missing, 'campo obrigatório pendente', 'campos obrigatórios pendentes')
         : 'Campos obrigatórios preenchidos';
+    }
+
+    if (step === 2) {
+      const openingTotal = (CONFIG.openingQuestions || []).length;
+      const openingAnswered = getOpeningAnsweredCount(state.form);
+      const section = CONFIG.sections.find(function (item) {
+        return item.step === 2;
+      });
+      const sectionTotal = section ? section.questions.length : 0;
+      const sectionAnswered = section
+        ? section.questions.filter(function (question) {
+            return answerIsValid(state.form.respostas[question.id]);
+          }).length
+        : 0;
+      return (
+        'Abertura ' + openingAnswered + '/' + openingTotal +
+        ' · ' + sectionAnswered + ' de ' + sectionTotal + ' perguntas'
+      );
     }
 
     const section = CONFIG.sections.find(function (item) {
@@ -2827,7 +4668,10 @@
     }
 
     if (subtitle) {
-      const details = [clean(identification.disciplina), clean(identification.turma)]
+      const details = [
+        clean(identification.disciplina),
+        Performance.classLabel(identification)
+      ]
         .filter(Boolean)
         .join(' · ');
       subtitle.textContent =
@@ -3400,7 +5244,7 @@
     const record = state.form;
     const validation = getValidation(record);
     const answered = getAnsweredCount(record);
-    const totals = Analysis.analyze(record).totals;
+    const unansweredCount = validation.unanswered.length;
     const meta = CONFIG.statuses[record.status] || CONFIG.statuses.rascunho;
     const identification = record.identificacao || {};
 
@@ -3420,10 +5264,10 @@
       summaryTile(
         'Respostas',
         answered + ' de ' + TOTAL_QUESTIONS,
-        totals.unanswered
-          ? totals.unanswered + ' ' + plural(totals.unanswered, 'sem resposta', 'sem resposta')
+        unansweredCount
+          ? unansweredCount + ' ' + plural(unansweredCount, 'sem resposta', 'sem resposta')
           : 'Todas respondidas',
-        totals.unanswered ? 'warning' : 'positive',
+        unansweredCount ? 'warning' : 'positive',
         'i-file'
       )
     );
@@ -3475,14 +5319,32 @@
       }
 
       if (validation.unanswered.length) {
-        const bySection = CONFIG.sections
-          .map(function (section) {
-            const count = validation.unanswered.filter(function (item) {
-              return item.section.id === section.id;
-            }).length;
-            return count ? section.title + ': ' + count : '';
+        const groups = [
+          {
+            id: 'abertura',
+            title: 'Abertura da aula',
+            count: validation.unanswered.filter(function (item) {
+              return item.section.id === 'abertura';
+            }).length
+          }
+        ].concat(
+          CONFIG.sections.map(function (section) {
+            return {
+              id: section.id,
+              title: section.title,
+              count: validation.unanswered.filter(function (item) {
+                return item.section.id === section.id;
+              }).length
+            };
           })
-          .filter(Boolean)
+        );
+        const bySection = groups
+          .filter(function (group) {
+            return group.count;
+          })
+          .map(function (group) {
+            return group.title + ': ' + group.count;
+          })
           .join('; ');
         textParts.push(
           validation.unanswered.length +
@@ -3536,6 +5398,14 @@
     table.appendChild(thead);
 
     const tbody = el('tbody');
+    const openingTotal = (CONFIG.openingQuestions || []).length;
+    const openingDone = getOpeningAnsweredCount(record);
+    const openingRow = el('tr');
+    openingRow.appendChild(el('th', null, 'Abertura da aula'));
+    openingRow.appendChild(el('td', null, String(openingDone)));
+    openingRow.appendChild(el('td', null, String(openingTotal)));
+    openingRow.appendChild(el('td', null, String(openingTotal - openingDone)));
+    tbody.appendChild(openingRow);
     CONFIG.sections.forEach(function (section) {
       const total = section.questions.length;
       const done = section.questions.filter(function (question) {
@@ -4082,6 +5952,40 @@
         renderReports();
         break;
 
+      case 'add-teacher':
+        openTeacherDialog('');
+        break;
+
+      case 'edit-teacher':
+        openTeacherDialog(id);
+        break;
+
+      case 'remove-teacher':
+        await handleRemoveTeacher(id);
+        break;
+
+      case 'restore-teacher':
+        await handleRestoreTeacher(id);
+        break;
+
+      case 'add-early-group':
+        await handleAddEarlyGroup();
+        break;
+
+      case 'remove-early-group':
+        await handleRemoveEarlyGroup(actionElement.dataset.name);
+        break;
+
+      case 'clear-performance-filters':
+        resetPerformanceFilters();
+        break;
+
+      case 'select-teacher':
+        state.performanceFilters.teacherGroup = actionElement.dataset.key || '';
+        syncPerformanceControls();
+        renderPerformance();
+        break;
+
       case 'export-backup':
         handleExportBackup();
         break;
@@ -4149,6 +6053,14 @@
   /* =======================================================================
    * 7. INÍCIO DA APLICAÇÃO
    * ===================================================================== */
+
+  window.ObservaEduDomain = {
+    normalizeRecord: normalizeRecord,
+    normalizeSettings: normalizeSettings,
+    normalizeTeachers: normalizeTeachers,
+    normalizeAbertura: normalizeAbertura,
+    createTeacherId: createTeacherId
+  };
 
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', init);

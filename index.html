@@ -17,10 +17,10 @@
   <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
   <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
   <link rel="apple-touch-icon" sizes="180x180" href="icons/apple-touch-icon-180.png">
-  <link rel="stylesheet" href="styles.css?v=1.2.1">
-  <script src="vendor/supabase-js-2.118.0.js?v=1.2.1"></script>
-  <script src="supabase-config.js?v=1.2.1"></script>
-  <script src="supabase.js?v=1.2.1"></script>
+  <link rel="stylesheet" href="styles.css?v=2.0.0">
+  <script src="vendor/supabase-js-2.118.0.js?v=2.0.0"></script>
+  <script src="supabase-config.js?v=2.0.0"></script>
+  <script src="supabase.js?v=2.0.0"></script>
   <script>
     // Bloqueia visualmente a área interna antes de o auth.js carregar quando
     // houver uma chave pública válida. Sem chave, o modo local continua.
@@ -60,6 +60,12 @@
       <polyline points="14 2 14 8 20 8"></polyline>
       <line x1="8" y1="13" x2="16" y2="13"></line>
       <line x1="8" y1="17" x2="14" y2="17"></line>
+    </symbol>
+    <symbol id="i-chart" viewBox="0 0 24 24">
+      <line x1="3" y1="21" x2="21" y2="21"></line>
+      <rect x="5" y="12" width="3.5" height="6"></rect>
+      <rect x="10.25" y="8" width="3.5" height="10"></rect>
+      <rect x="15.5" y="4" width="3.5" height="14"></rect>
     </symbol>
     <symbol id="i-settings" viewBox="0 0 24 24">
       <line x1="4" y1="21" x2="4" y2="14"></line><line x1="4" y1="10" x2="4" y2="3"></line>
@@ -312,6 +318,10 @@
           <svg class="icon" aria-hidden="true"><use href="#i-file"></use></svg>
           <span>Relatórios</span>
         </button>
+        <button class="nav-item" type="button" data-action="nav" data-view="performance">
+          <svg class="icon" aria-hidden="true"><use href="#i-chart"></use></svg>
+          <span>Desempenho dos Professores</span>
+        </button>
 
         <p class="nav-label nav-label--second">Gestão</p>
         <button class="nav-item" type="button" data-action="nav" data-view="settings">
@@ -491,6 +501,11 @@
                     <span><strong>Acessar relatórios</strong><small>Visualizar e imprimir documentos</small></span>
                     <svg class="icon quick-chevron" aria-hidden="true"><use href="#i-arrow-right"></use></svg>
                   </button>
+                  <button class="quick-action" type="button" data-action="nav" data-view="performance">
+                    <span class="quick-icon quick-icon--blue"><svg class="icon" aria-hidden="true"><use href="#i-chart"></use></svg></span>
+                    <span><strong>Desempenho dos Professores</strong><small id="quickTeacherCount">Histórico e indicadores</small></span>
+                    <svg class="icon quick-chevron" aria-hidden="true"><use href="#i-arrow-right"></use></svg>
+                  </button>
                 </div>
               </section>
 
@@ -529,7 +544,7 @@
             <div class="form-toolbar-actions">
               <div class="form-progress" aria-live="polite">
                 <div class="progress-label">
-                  <span id="progressText">0 de 25 perguntas respondidas</span>
+                  <span id="progressText">0 de 27 perguntas respondidas</span>
                   <span id="progressPercent">0%</span>
                 </div>
                 <div class="progress-track" role="progressbar" aria-label="Progresso das perguntas" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" id="progressTrack">
@@ -560,9 +575,18 @@
 
               <div class="card form-card">
                 <div class="form-grid">
-                  <div class="field">
-                    <label for="fieldProfessor">Nome do professor(a) observado(a) <span class="required-mark">*</span></label>
-                    <input id="fieldProfessor" type="text" maxlength="120" autocomplete="off" data-field="professor" placeholder="Nome do professor(a)">
+                  <div class="field field--full">
+                    <label for="fieldProfessor">Professor(a) observado(a) <span class="required-mark">*</span></label>
+                    <div class="select-with-action">
+                      <select id="fieldProfessor" data-teacher-select aria-describedby="teacherSelectHelp">
+                        <option value="">Selecione um professor(a)</option>
+                      </select>
+                      <button class="btn btn-secondary btn-sm" type="button" data-action="add-teacher">
+                        <svg class="icon" aria-hidden="true"><use href="#i-plus"></use></svg>
+                        <span>Cadastrar</span>
+                      </button>
+                    </div>
+                    <p class="field-help" id="teacherSelectHelp">O professor observado é escolhido na lista cadastrada. O nome usado no momento do registro fica salvo na observação.</p>
                     <p class="field-error" data-error-for="professor"></p>
                   </div>
                   <div class="field">
@@ -571,8 +595,25 @@
                     <p class="field-error" data-error-for="disciplina"></p>
                   </div>
                   <div class="field">
-                    <label for="fieldTurma">Turma ou ano escolar <span class="required-mark">*</span></label>
-                    <input id="fieldTurma" type="text" maxlength="80" autocomplete="off" data-field="turma" placeholder="Ex.: 8º ano B">
+                    <label for="fieldEtapa">Etapa de ensino <span class="required-mark">*</span></label>
+                    <select id="fieldEtapa" data-school-select="etapa">
+                      <option value="">Selecione a etapa</option>
+                    </select>
+                    <p class="field-error" data-error-for="etapa"></p>
+                  </div>
+                  <div class="field">
+                    <label for="fieldSerie">Ano ou série <span class="required-mark">*</span></label>
+                    <select id="fieldSerie" data-school-select="serie">
+                      <option value="">Selecione a etapa primeiro</option>
+                    </select>
+                    <p class="field-help" id="serieHelp">As opções dependem da etapa escolhida.</p>
+                    <p class="field-error" data-error-for="serie"></p>
+                  </div>
+                  <div class="field">
+                    <label for="fieldTurma">Turma <span class="required-mark">*</span></label>
+                    <select id="fieldTurma" data-school-select="turma">
+                      <option value="">Selecione a turma</option>
+                    </select>
                     <p class="field-error" data-error-for="turma"></p>
                   </div>
                   <div class="field">
@@ -586,14 +627,15 @@
                     <p class="field-error" data-error-for="horario"></p>
                   </div>
                   <div class="field">
-                    <label for="fieldObservador">Nome do orientador(a) / observador(a) <span class="required-mark">*</span></label>
-                    <input id="fieldObservador" type="text" maxlength="120" autocomplete="off" data-field="observador" placeholder="Nome de quem realizou a observação">
+                    <label for="fieldObservador">Orientador responsável</label>
+                    <input id="fieldObservador" type="text" maxlength="120" data-field="observador" readonly>
+                    <p class="field-help">Nome de exibição da conta autenticada, definido em Configurações. Não é o professor observado.</p>
                     <p class="field-error" data-error-for="observador"></p>
                   </div>
                   <div class="field field--full">
                     <label for="fieldTema">Tema ou objetivo da aula <span class="optional-mark">(opcional)</span></label>
                     <textarea id="fieldTema" rows="3" maxlength="600" data-field="tema" placeholder="Descreva o tema trabalhado ou o objetivo informado para a aula."></textarea>
-                    <p class="field-help">Essa informação aparecerá na seção 1 do relatório.</p>
+                    <p class="field-help">Uso interno. Não entra automaticamente no relatório curto entregue ao professor.</p>
                     <p class="field-error" data-error-for="tema"></p>
                   </div>
                 </div>
@@ -666,13 +708,25 @@
               </div>
             </div>
 
-            <!-- Etapa 7: revisão e geração -->
+            <!-- Etapa 7: devolutiva e geração -->
             <div class="form-step" data-step="7" hidden>
               <div class="section-heading">
                 <div>
                   <p class="eyebrow">Etapa 7</p>
-                  <h2 class="section-title">Revisar e gerar relatório</h2>
-                  <p class="section-description">Confira o resumo abaixo. O relatório só será marcado como concluído ao clicar em "Gerar relatório".</p>
+                  <h2 class="section-title">Observações para o professor</h2>
+                  <p class="section-description">Registre comentários relevantes, objetivos e construtivos. Este é o texto principal do documento curto entregue ao professor.</p>
+                </div>
+              </div>
+
+              <div class="card form-card teacher-note-card">
+                <div class="field">
+                  <label for="fieldObservacoesProfessor">Observações para o professor</label>
+                  <textarea id="fieldObservacoesProfessor" rows="8" maxlength="4000" data-teacher-note placeholder="Escreva comentários relevantes, objetivos e construtivos, com base no que foi observado."></textarea>
+                  <p class="field-help">As respostas das sete etapas, a análise interna e os indicadores não entram neste relatório.</p>
+                </div>
+                <div class="inline-note">
+                  <svg class="icon" aria-hidden="true"><use href="#i-info"></use></svg>
+                  <p>Os próximos passos só aparecem no PDF se o campo "Encaminhamentos ou ações futuras" da etapa 5 estiver preenchido.</p>
                 </div>
               </div>
 
@@ -683,8 +737,8 @@
                   <svg class="icon" aria-hidden="true"><use href="#i-file"></use></svg>
                 </div>
                 <div class="report-cta-text">
-                  <h3>Documento pronto para revisão</h3>
-                  <p>Você pode visualizar o relatório como rascunho ou concluir a observação. A impressão usa a janela do navegador e permite salvar em PDF.</p>
+                  <h3>Documento curto para o professor</h3>
+                  <p>Você pode visualizar a devolutiva ou concluir a observação. A impressão usa a janela do navegador e permite salvar em PDF.</p>
                 </div>
                 <div class="report-cta-actions">
                   <button class="btn btn-secondary" type="button" data-action="preview-report">
@@ -810,6 +864,150 @@
           <div class="records-list" id="reportsList"></div>
         </section>
 
+        <!-- ============================ DESEMPENHO ============================ -->
+        <section class="view" id="view-performance" hidden aria-labelledby="performanceTitle">
+          <div class="page-heading">
+            <div>
+              <p class="eyebrow">Acompanhamento</p>
+              <h2 class="page-title" id="performanceTitle">Desempenho dos Professores</h2>
+              <p class="page-description">Indicadores descritivos a partir de observações concluídas. Não há ranking, nota automática nem diagnóstico.</p>
+            </div>
+            <div class="heading-actions">
+              <button class="btn btn-secondary" type="button" data-action="nav" data-view="settings">
+                <svg class="icon" aria-hidden="true"><use href="#i-users"></use></svg>
+                <span>Gerenciar professores</span>
+              </button>
+              <button class="btn btn-primary" type="button" data-action="new-observation">
+                <svg class="icon" aria-hidden="true"><use href="#i-plus"></use></svg>
+                <span>Nova observação</span>
+              </button>
+            </div>
+          </div>
+
+          <div class="card filters-card">
+            <div class="filters-grid performance-filters">
+              <div class="field">
+                <label for="performanceTeacher">Professor</label>
+                <select id="performanceTeacher">
+                  <option value="">Todos os professores</option>
+                </select>
+              </div>
+              <div class="field">
+                <label for="performanceYear">Ano letivo</label>
+                <select id="performanceYear">
+                  <option value="">Todos os anos</option>
+                </select>
+              </div>
+              <div class="field">
+                <label for="performanceEtapa">Etapa</label>
+                <select id="performanceEtapa">
+                  <option value="">Todas as etapas</option>
+                </select>
+              </div>
+              <div class="field">
+                <label for="performanceSerie">Série</label>
+                <select id="performanceSerie">
+                  <option value="">Todas as séries</option>
+                </select>
+              </div>
+              <div class="field">
+                <label for="performanceTurma">Turma</label>
+                <select id="performanceTurma">
+                  <option value="">Todas as turmas</option>
+                </select>
+              </div>
+              <div class="field">
+                <label for="performanceFrom">Período inicial</label>
+                <input id="performanceFrom" type="date">
+              </div>
+              <div class="field">
+                <label for="performanceTo">Período final</label>
+                <input id="performanceTo" type="date">
+              </div>
+            </div>
+            <div class="filters-footer">
+              <p class="filter-count" id="performanceCount">0 observações concluídas</p>
+              <button class="btn btn-ghost btn-sm" type="button" data-action="clear-performance-filters">Limpar filtros</button>
+            </div>
+          </div>
+
+          <div id="performanceNotice"></div>
+          <div class="performance-stats" id="performanceStats"></div>
+
+          <div class="performance-grid">
+            <section class="card chart-card" aria-labelledby="punctualityChartTitle">
+              <div class="card-header">
+                <div>
+                  <h3 class="card-title" id="punctualityChartTitle">Pontualidade</h3>
+                  <p class="card-subtitle">O professor inicia a aula no horário programado?</p>
+                </div>
+              </div>
+              <div id="punctualityChart"></div>
+            </section>
+
+            <section class="card chart-card" aria-labelledby="attendanceChartTitle">
+              <div class="card-header">
+                <div>
+                  <h3 class="card-title" id="attendanceChartTitle">Realização da chamada</h3>
+                  <p class="card-subtitle">O professor realiza a chamada dos alunos?</p>
+                </div>
+              </div>
+              <div id="attendanceChart"></div>
+            </section>
+
+            <section class="card chart-card chart-card--wide" aria-labelledby="distributionChartTitle">
+              <div class="card-header">
+                <div>
+                  <h3 class="card-title" id="distributionChartTitle">Distribuição de respostas</h3>
+                  <p class="card-subtitle">Sim, Não, Parcialmente e Não observado / Não se aplica nas observações concluídas do recorte.</p>
+                </div>
+              </div>
+              <div id="distributionChart"></div>
+            </section>
+
+            <section class="card chart-card chart-card--wide" aria-labelledby="monthlyChartTitle">
+              <div class="card-header">
+                <div>
+                  <h3 class="card-title" id="monthlyChartTitle">Evolução mensal</h3>
+                  <p class="card-subtitle">Quantidade de observações por mês. Tendências só aparecem com pelo menos 3 registros no mês.</p>
+                </div>
+              </div>
+              <div id="monthlyChart"></div>
+            </section>
+
+            <section class="card chart-card chart-card--wide" aria-labelledby="annualChartTitle">
+              <div class="card-header">
+                <div>
+                  <h3 class="card-title" id="annualChartTitle">Evolução anual</h3>
+                  <p class="card-subtitle">Observações concluídas por ano letivo no recorte.</p>
+                </div>
+              </div>
+              <div id="annualChart"></div>
+            </section>
+          </div>
+
+          <section class="card performance-table-card" aria-labelledby="teacherTableTitle">
+            <div class="card-header">
+              <div>
+                <h3 class="card-title" id="teacherTableTitle">Resumo por professor</h3>
+                <p class="card-subtitle">Ordem alfabética. Contagens descritivas, sem ranking nem nota.</p>
+              </div>
+              <span class="source-tag">Somente dados registrados</span>
+            </div>
+            <div id="performanceTeacherTable"></div>
+          </section>
+
+          <section class="card performance-table-card" aria-labelledby="teacherHistoryTitle">
+            <div class="card-header">
+              <div>
+                <h3 class="card-title" id="teacherHistoryTitle">Histórico individual</h3>
+                <p class="card-subtitle">Selecione um professor para ver o histórico, inclusive se ele não estiver mais na lista ativa.</p>
+              </div>
+            </div>
+            <div id="teacherHistory"></div>
+          </section>
+        </section>
+
         <!-- ============================ RELATÓRIO ============================ -->
         <section class="view" id="view-report" hidden aria-label="Relatório de observação pedagógica">
           <div class="report-toolbar no-print">
@@ -843,7 +1041,7 @@
             <div>
               <p class="eyebrow">Gestão</p>
               <h2 class="page-title" id="settingsTitle">Configurações</h2>
-              <p class="page-description" id="settingsDescription">Identificação da escola, backup e informações sobre o armazenamento local.</p>
+              <p class="page-description" id="settingsDescription">Nome do orientador, cadastro de professores, grupos da Educação Infantil e armazenamento.</p>
             </div>
           </div>
 
@@ -852,7 +1050,7 @@
               <div class="card-header">
                 <div>
                   <h3 class="card-title">Identificação da escola</h3>
-                  <p class="card-subtitle">Esses dados aparecem no cabeçalho do relatório.</p>
+                  <p class="card-subtitle">Identificação da escola e nome de exibição do orientador.</p>
                 </div>
               </div>
               <div class="field">
@@ -869,6 +1067,11 @@
                   <input id="settingsCity" type="text" maxlength="100" placeholder="Ex.: Belo Horizonte / MG">
                 </div>
               </div>
+              <div class="field">
+                <label for="settingsDisplayName">Nome de exibição do orientador <span class="required-mark">*</span></label>
+                <input id="settingsDisplayName" type="text" maxlength="120" autocomplete="name" placeholder="Ex.: Maria Silva">
+                <p class="field-help">Usado como orientador responsável nas observações. Diferente do professor observado.</p>
+              </div>
               <div class="settings-actions">
                 <button class="btn btn-primary" type="submit">
                   <svg class="icon" aria-hidden="true"><use href="#i-save"></use></svg>
@@ -876,6 +1079,45 @@
                 </button>
               </div>
             </form>
+
+            <section class="card settings-card settings-card--full" aria-labelledby="teachersTitle">
+              <div class="card-header">
+                <div>
+                  <h3 class="card-title" id="teachersTitle">Professores cadastrados</h3>
+                  <p class="card-subtitle">Cadastro com identificador estável (tch_...). Remover tira da lista ativa sem apagar o histórico.</p>
+                </div>
+                <div class="settings-header-actions">
+                  <span class="badge" id="teacherCount">0 professores</span>
+                  <button class="btn btn-secondary btn-sm" type="button" data-action="add-teacher">
+                    <svg class="icon" aria-hidden="true"><use href="#i-plus"></use></svg>
+                    <span>Adicionar professor</span>
+                  </button>
+                </div>
+              </div>
+              <div class="teacher-list" id="teacherList"></div>
+              <p class="field-help">Nomes duplicados não são permitidos. Professores inativos continuam acessíveis no histórico e no desempenho.</p>
+            </section>
+
+            <section class="card settings-card settings-card--full" aria-labelledby="earlyGroupsTitle">
+              <div class="card-header">
+                <div>
+                  <h3 class="card-title" id="earlyGroupsTitle">Grupos da Educação Infantil</h3>
+                  <p class="card-subtitle">Agrupamentos usados pela escola na Educação Infantil. Não há nomenclatura padrão inventada pelo sistema.</p>
+                </div>
+              </div>
+              <div class="settings-add-row">
+                <div class="field">
+                  <label for="earlyGroupInput">Nome do grupo</label>
+                  <input id="earlyGroupInput" type="text" maxlength="60" placeholder="Ex.: Maternal II">
+                </div>
+                <button class="btn btn-secondary" type="button" data-action="add-early-group">
+                  <svg class="icon" aria-hidden="true"><use href="#i-plus"></use></svg>
+                  <span>Adicionar grupo</span>
+                </button>
+              </div>
+              <div class="tag-list" id="earlyGroupList"></div>
+              <p class="field-help">Se nenhum grupo estiver configurado, o formulário orienta a cadastrá-los antes de usar a Educação Infantil.</p>
+            </section>
 
             <section class="card settings-card" aria-labelledby="storageTitle">
               <div class="card-header">
@@ -1034,7 +1276,7 @@
       </main>
 
       <footer class="app-footer no-print">
-        <p id="appFooterText">ObservaEdu · Versão 1.2.1 · Dados salvos apenas neste navegador.</p>
+        <p id="appFooterText">ObservaEdu · Versão 2.0.0 · Dados salvos apenas neste navegador.</p>
         <button class="link-button" type="button" data-action="open-help">Como usar o sistema</button>
       </footer>
     </div>
@@ -1085,6 +1327,35 @@
     </div>
   </dialog>
 
+  <!-- Cadastro e edição de professor -->
+  <dialog class="modal" id="teacherDialog" aria-labelledby="teacherDialogTitle">
+    <form class="modal-card" id="teacherDialogForm" novalidate>
+      <div class="modal-icon modal-icon--info">
+        <svg class="icon" aria-hidden="true"><use href="#i-users"></use></svg>
+      </div>
+      <h2 class="modal-title" id="teacherDialogTitle">Adicionar professor(a)</h2>
+      <p class="modal-message" id="teacherDialogMessage">O identificador é criado automaticamente e permanece estável mesmo que o nome seja alterado depois.</p>
+      <input type="hidden" id="teacherDialogId">
+      <div class="field">
+        <label for="teacherDialogName">Nome do professor(a) <span class="required-mark">*</span></label>
+        <input id="teacherDialogName" type="text" maxlength="120" autocomplete="off" placeholder="Nome completo ou como é conhecido(a)">
+      </div>
+      <div class="field">
+        <label for="teacherDialogDisciplina">Disciplina principal <span class="optional-mark">(opcional)</span></label>
+        <input id="teacherDialogDisciplina" type="text" maxlength="80" autocomplete="off" placeholder="Ex.: Matemática">
+        <p class="field-help">Usada apenas para preencher a disciplina em novas observações.</p>
+      </div>
+      <p class="field-error" id="teacherDialogError"></p>
+      <div class="modal-actions">
+        <button class="btn btn-secondary" type="button" id="teacherDialogCancel">Cancelar</button>
+        <button class="btn btn-primary" type="submit" id="teacherDialogSave">
+          <svg class="icon" aria-hidden="true"><use href="#i-save"></use></svg>
+          <span id="teacherDialogSaveLabel">Salvar professor</span>
+        </button>
+      </div>
+    </form>
+  </dialog>
+
   <div class="pwa-update-bar no-print" id="pwaUpdateBar" role="status" aria-live="polite" hidden>
     <p>Uma nova versão do ObservaEdu está disponível. Seus registros serão mantidos.</p>
     <div class="pwa-update-actions">
@@ -1097,12 +1368,13 @@
 
   <!-- Ordem dos scripts:
        No <head>: biblioteca vendor -> supabase-config.js -> supabase.js (permite validação imediata da chave).
-       No body: questions -> storage -> analysis -> report -> auth -> app. -->
-  <script src="questions.js?v=1.2.1"></script>
-  <script src="storage.js?v=1.2.1"></script>
-  <script src="analysis.js?v=1.2.1"></script>
-  <script src="report.js?v=1.2.1"></script>
-  <script src="auth.js?v=1.2.1"></script>
-  <script src="app.js?v=1.2.1"></script>
+       No body: questions -> storage -> analysis -> performance -> report -> auth -> app. -->
+  <script src="questions.js?v=2.0.0"></script>
+  <script src="storage.js?v=2.0.0"></script>
+  <script src="analysis.js?v=2.0.0"></script>
+  <script src="performance.js?v=2.0.0"></script>
+  <script src="report.js?v=2.0.0"></script>
+  <script src="auth.js?v=2.0.0"></script>
+  <script src="app.js?v=2.0.0"></script>
 </body>
 </html>
