@@ -38,7 +38,7 @@ window.ObservaEduAuth = (function () {
   function configuration() {
     return Supabase
       ? Supabase.configuration()
-      : { configured: false, reason: 'O módulo do Supabase não foi carregado.' };
+      : { configured: false, reason: 'O módulo de conexão não foi carregado.' };
   }
 
   function isConfigured() {
@@ -237,8 +237,7 @@ window.ObservaEduAuth = (function () {
         mode === 'signup'
           ? 'Ao criar a conta, você concorda em usar o ObservaEdu apenas para registros pedagógicos. ' +
             'Cada conta acessa somente os próprios dados.'
-          : 'Ainda não tem conta? Use “Criar minha conta”. Os dados de cada conta são isolados ' +
-            'pelas políticas de segurança do banco.';
+          : 'Ainda não tem conta? Use “Criar minha conta”. Os dados de cada conta são separados.';
     }
     if (password) {
       password.setAttribute(
@@ -603,7 +602,7 @@ window.ObservaEduAuth = (function () {
     if (!value) return '';
     if (/expired|invalid/i.test(value)) return 'o link expirou ou já foi utilizado.';
     if (/access denied|not authorized|forbidden/i.test(value)) {
-      return 'o acesso foi negado pelo Supabase.';
+      return 'o acesso foi negado.';
     }
     return /[.!?]$/.test(value) ? value : value + '.';
   }

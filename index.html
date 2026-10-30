@@ -274,12 +274,10 @@
       </form>
 
       <p class="auth-help" id="authHelp">
-        Ainda não tem conta? Use “Criar minha conta”. Os dados de cada conta são isolados
-        pelas políticas de segurança do banco.
+        Ainda não tem conta? Use “Criar minha conta”. Os dados de cada conta são separados.
       </p>
       <p class="auth-help auth-help--small">
-        A chave usada pelo navegador é pública. A proteção dos registros depende do login e
-        das políticas RLS do Supabase; cada conta acessa somente os próprios dados.
+        O acesso é protegido pelo login. Cada conta acessa somente os próprios registros.
       </p>
     </main>
   </div>
@@ -347,7 +345,7 @@
 
       <div class="sidebar-note">
         <svg class="icon" aria-hidden="true"><use href="#i-lock"></use></svg>
-        <p id="sidebarStorageNote">Nesta versão local, os dados ficam salvos apenas neste navegador e não são compartilhados automaticamente.</p>
+        <p id="sidebarStorageNote">Os dados ficam salvos apenas neste navegador e não são compartilhados automaticamente.</p>
         <button class="link-button" type="button" data-action="nav" data-view="settings">Saiba mais</button>
       </div>
 
@@ -385,7 +383,7 @@
         </div>
 
         <div class="topbar-actions">
-          <span class="local-chip" id="dataModeChip" title="Os registros desta versão ficam no armazenamento local deste navegador.">
+          <span class="local-chip" id="dataModeChip" title="Os registros ficam salvos neste navegador.">
             <svg class="icon" aria-hidden="true"><use href="#i-lock" id="dataModeIconUse"></use></svg>
             <span id="dataModeLabel">Dados locais</span>
           </span>
@@ -398,7 +396,7 @@
 
       <div class="app-banner" id="appBanner" role="alert" hidden>
         <svg class="icon" aria-hidden="true"><use href="#i-alert"></use></svg>
-        <p id="appBannerMessage">Modo local: os dados ficam apenas neste navegador e não são sincronizados com a nuvem.</p>
+        <p id="appBannerMessage">Modo local: os dados ficam apenas neste navegador.</p>
         <button class="icon-btn" type="button" id="bannerDismiss" aria-label="Fechar aviso">
           <svg class="icon" aria-hidden="true"><use href="#i-close"></use></svg>
         </button>
@@ -414,11 +412,7 @@
           var banner = document.getElementById('appBanner');
           var message = document.getElementById('appBannerMessage');
           if (!banner || !message) return;
-          var api = window.ObservaEduSupabase;
-          var status = api && typeof api.configuration === 'function' ? api.configuration() : null;
-          message.textContent =
-            'Modo local: os dados ficam apenas neste navegador e não são sincronizados com a nuvem.' +
-            (status && status.reason ? ' ' + status.reason : '');
+          message.textContent = 'Modo local: os dados ficam apenas neste navegador.';
           banner.hidden = false;
         })();
       </script>
@@ -515,7 +509,7 @@
                 </div>
                 <div>
                   <h3 class="card-title" id="dataNoteTitle">Sobre os dados desta versão</h3>
-                  <p id="dataNoteText">Os registros ficam no <strong>armazenamento local deste navegador</strong>. Eles não são enviados a servidores nem compartilhados com outros computadores.</p>
+                  <p id="dataNoteText">Os registros ficam salvos neste navegador e não são compartilhados com outras pessoas.</p>
                   <p>Use a exportação de backup em Configurações para guardar uma cópia.</p>
                   <button class="link-button" type="button" data-action="nav" data-view="settings">Abrir configurações</button>
                 </div>
@@ -1041,7 +1035,7 @@
             <div>
               <p class="eyebrow">Gestão</p>
               <h2 class="page-title" id="settingsTitle">Configurações</h2>
-              <p class="page-description" id="settingsDescription">Nome do orientador, cadastro de professores, grupos da Educação Infantil e armazenamento.</p>
+              <p class="page-description" id="settingsDescription">Nome do orientador, cadastro de professores, grupos da Educação Infantil e organização dos dados.</p>
             </div>
           </div>
 
@@ -1122,8 +1116,8 @@
             <section class="card settings-card" aria-labelledby="storageTitle">
               <div class="card-header">
                 <div>
-                  <h3 class="card-title" id="storageTitle">Armazenamento local</h3>
-                  <p class="card-subtitle" id="storageSubtitle">Dados desta versão, backup e limpeza.</p>
+                  <h3 class="card-title" id="storageTitle">Registros deste navegador</h3>
+                  <p class="card-subtitle" id="storageSubtitle">Backup e organização dos dados.</p>
                 </div>
                 <span class="badge" id="storageStatus">Verificando</span>
               </div>
@@ -1139,7 +1133,7 @@
                 </div>
               </div>
 
-              <p class="settings-text" id="storageDescription">O <code>localStorage</code> guarda os dados apenas neste navegador, neste computador. Ele não é um banco de dados institucional: não oferece controle de acesso, auditoria ou compartilhamento entre máquinas.</p>
+              <p class="settings-text" id="storageDescription">Os registros ficam salvos neste navegador. Faça backup em arquivo e guarde em local seguro.</p>
 
               <div class="settings-button-row">
                 <button class="btn btn-secondary" type="button" data-action="export-backup">
@@ -1152,7 +1146,7 @@
                 </button>
                 <input class="sr-only" id="importFileInput" type="file" accept=".json,application/json">
               </div>
-              <p class="field-help" id="backupHelp">O backup é um arquivo JSON com todos os registros e a identificação da escola. A importação substitui os dados atuais deste navegador após confirmação.</p>
+              <p class="field-help" id="backupHelp">O backup é um arquivo de segurança com todos os registros e a identificação da escola. A importação substitui os dados atuais após confirmação.</p>
 
               <div class="danger-zone">
                 <div>
@@ -1169,8 +1163,8 @@
             <section class="card settings-card settings-card--full" id="cloudCard" aria-labelledby="cloudTitle" hidden>
               <div class="card-header">
                 <div>
-                  <h3 class="card-title" id="cloudTitle">Conta e nuvem</h3>
-                  <p class="card-subtitle">Sessão autenticada, origem dos dados e migração.</p>
+                  <h3 class="card-title" id="cloudTitle">Conta e dados</h3>
+                  <p class="card-subtitle">Conta ativa, origem dos dados e migração.</p>
                 </div>
                 <span class="badge badge--positive" id="cloudStatus">Conectado</span>
               </div>
@@ -1181,14 +1175,13 @@
                   <strong id="cloudAccountEmail">—</strong>
                 </div>
                 <div>
-                  <span class="storage-label">Banco de dados</span>
-                  <strong>Supabase · PostgreSQL + RLS</strong>
+                  <span class="storage-label">Onde os dados ficam</span>
+                  <strong>Sua conta</strong>
                 </div>
               </div>
 
               <p class="settings-text" id="cloudDescription">
-                Os registros são lidos e gravados no servidor. A confirmação de sucesso só aparece
-                depois da resposta do Supabase. Sem conexão, a gravação não é confirmada.
+                Os registros são salvos na sua conta. A gravação só é confirmada quando concluída com sucesso. Sem conexão, tente novamente.
               </p>
 
               <div class="migration-box">
@@ -1199,11 +1192,11 @@
                 <div class="settings-button-row">
                   <button class="btn btn-primary" type="button" id="migrateButton" data-action="migrate-local">
                     <svg class="icon" aria-hidden="true"><use href="#i-upload"></use></svg>
-                    <span id="migrateButtonLabel">Migrar registros locais</span>
+                    <span id="migrateButtonLabel">Migrar registros deste navegador</span>
                   </button>
                   <button class="btn btn-secondary" type="button" data-action="export-local-backup">
                     <svg class="icon" aria-hidden="true"><use href="#i-download"></use></svg>
-                    <span>Exportar dados locais</span>
+                    <span>Exportar dados deste navegador</span>
                   </button>
                 </div>
               </div>
@@ -1222,13 +1215,13 @@
                 </div>
                 <span class="badge" id="pwaStatus">Verificando</span>
               </div>
-              <p class="settings-text">O ObservaEdu pode ser instalado na tela inicial ou na área de trabalho e aberto em uma janela própria. A instalação não envia dados para servidores e não substitui o backup em JSON.</p>
+              <p class="settings-text">O ObservaEdu pode ser instalado na tela inicial ou na área de trabalho e aberto em uma janela própria. A instalação não substitui o backup em arquivo.</p>
               <ul class="info-list">
                 <li><strong>Android (Chrome ou Edge):</strong> abra o menu do navegador e escolha <em>Instalar aplicativo</em> ou <em>Adicionar à tela inicial</em>. O botão de instalação também aparece abaixo quando o navegador permite.</li>
                 <li><strong>iPhone e iPad (Safari):</strong> toque em <em>Compartilhar</em> e depois em <em>Adicionar à Tela de Início</em>. Outros navegadores no iOS podem não oferecer essa opção.</li>
                 <li><strong>Computador (Chrome ou Edge):</strong> use o ícone de instalação na barra de endereço ou o menu do navegador.</li>
                 <li><strong>Offline:</strong> funciona somente depois que o site já tiver sido aberto e armazenado em cache neste navegador. A primeira visita ainda precisa de internet.</li>
-                <li id="pwaStorageItem"><strong>Atualizações:</strong> quando houver uma nova versão, o sistema avisa. Atualizar não apaga os registros salvos no <code>localStorage</code>.</li>
+                <li id="pwaStorageItem"><strong>Atualizações:</strong> quando houver uma nova versão, o sistema avisa. A atualização mantém os dados salvos.</li>
                 <li><strong>Segurança:</strong> <span id="pwaSecurityItem">O PWA não oferece login, autenticação nem proteção institucional. Qualquer pessoa com acesso a este navegador pode consultar os dados locais.</span></li>
               </ul>
               <div class="settings-button-row">
@@ -1268,7 +1261,7 @@
                   <p class="card-subtitle">Limites conscientes desta primeira versão.</p>
                 </div>
               </div>
-              <p class="settings-text" id="futureText">Esta versão foi organizada em camadas simples (configuração, armazenamento, análise, relatório e interface). Uma versão institucional precisará de banco de dados, autenticação, controle de permissões, trilha de auditoria e política de backup. Nenhuma integração fictícia com servidores ou inteligência artificial foi implementada.</p>
+              <p class="settings-text" id="futureText">Esta versão usa regras claras para a análise e exige revisão humana antes de gerar o relatório. Não há integração com inteligência artificial nem sincronização automática.</p>
               <p class="settings-text">A análise automática usa regras explícitas de JavaScript. Para integrar uma IA no futuro, a função central de análise pode ser substituída, mantendo a revisão humana obrigatória antes da impressão.</p>
             </section>
           </div>
@@ -1319,7 +1312,7 @@
       </ol>
       <div class="modal-note">
         <svg class="icon" aria-hidden="true"><use href="#i-lock"></use></svg>
-        <p id="helpPrivacyNote">Os dados desta versão ficam no armazenamento local deste navegador. Faça backup em Configurações e não use o sistema como único repositório institucional. O PWA não oferece login nem proteção institucional.</p>
+        <p id="helpPrivacyNote">Os dados ficam salvos neste navegador. Faça backup em Configurações e não use o sistema como único repositório institucional. O aplicativo não substitui o login nem a proteção institucional.</p>
       </div>
       <div class="modal-actions">
         <button class="btn btn-primary" type="button" id="helpOk">Entendi</button>

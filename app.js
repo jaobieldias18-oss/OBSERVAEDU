@@ -62,7 +62,7 @@
     },
     settings: {
       title: 'Configurações',
-      subtitle: 'Escola, conta, armazenamento e backup'
+      subtitle: 'Escola, conta e organização dos dados'
     }
   };
 
@@ -777,7 +777,7 @@
         state.observations = [];
         state.cloudLoaded = false;
         problems.push(
-          'Não foi possível carregar os registros da nuvem. ' +
+          'Não foi possível carregar os registros. ' +
             (observations.error || 'Verifique a conexão e tente novamente.')
         );
       }
@@ -787,7 +787,7 @@
       } else {
         state.settings = normalizeSettings({});
         problems.push(
-          'Não foi possível carregar as configurações da nuvem. ' +
+          'Não foi possível carregar as configurações. ' +
             (settings.error || 'As configurações atuais não foram alteradas.')
         );
       }
@@ -796,7 +796,7 @@
 
       if (!state.storageAvailable) {
         problems.push(
-          'O navegador bloqueou o armazenamento local. A sessão pode não permanecer ' +
+          'O navegador bloqueou o acesso aos dados. A sessão pode não permanecer ' +
             'ao recarregar a página; verifique as permissões do navegador.'
         );
       }
@@ -828,7 +828,7 @@
 
     if (!state.storageAvailable) {
       showBanner(
-        'O navegador bloqueou o armazenamento local. Você ainda pode usar o sistema nesta sessão, ' +
+        'O navegador bloqueou o acesso aos dados. Você ainda pode usar o sistema nesta sessão, ' +
           'mas os registros não serão mantidos ao fechar ou atualizar a página. ' +
           'Verifique as permissões do navegador ou o modo de navegação privada.'
       );
@@ -847,7 +847,7 @@
           (result.error ||
             (result.failed
               ? result.failed + ' registro(s) não foram gravados no servidor.'
-              : 'Não foi possível gravar os dados na nuvem.')) +
+              : 'Não foi possível gravar os dados na sua conta.')) +
             ' Os dados desta sessão permanecem na interface, mas a gravação no servidor NÃO foi confirmada.'
         );
         updateStoragePanel();
@@ -878,7 +878,7 @@
       if (!result.ok) {
         state.pendingCloudWrite = true;
         showBanner(
-          (result.error || 'Não foi possível gravar as configurações na nuvem.') +
+          (result.error || 'Não foi possível gravar as configurações na sua conta.') +
             ' As alterações valem apenas nesta sessão até que o servidor confirme a gravação.'
         );
         updateStoragePanel();
@@ -1065,10 +1065,10 @@
         badge.textContent = 'Gravação pendente';
       } else if (state.cloudLoaded) {
         badge.className = 'badge badge--positive';
-        badge.textContent = 'Supabase conectado';
+        badge.textContent = 'Conectado';
       } else {
         badge.className = 'badge badge--warning';
-        badge.textContent = 'Nuvem indisponível';
+        badge.textContent = 'Sem conexão';
       }
     } else {
       const available = state.storageAvailable && Storage.isAvailable();
@@ -1077,7 +1077,7 @@
         badge.textContent = 'Disponível';
       } else {
         badge.className = 'badge badge--warning';
-        badge.textContent = 'Somente memória';
+        badge.textContent = 'Indisponível';
       }
     }
 
@@ -1096,7 +1096,7 @@
       plural(concluded, 'concluída', 'concluídas');
 
     if (cloud) {
-      usage.textContent = state.cloudLoaded ? 'Supabase' : 'Não confirmado';
+      usage.textContent = state.cloudLoaded ? 'Sua conta' : 'Não confirmado';
       return;
     }
 
@@ -1127,8 +1127,8 @@
     if (chip) {
       chip.classList.toggle('local-chip--cloud', cloud);
       chip.title = cloud
-        ? 'Os registros são lidos e gravados no Supabase após a autenticação.'
-        : 'Os registros desta versão ficam no armazenamento local deste navegador.';
+        ? 'Os registros desta conta ficam salvos na nuvem.'
+        : 'Os registros ficam salvos neste navegador.';
     }
     if (iconUse) iconUse.setAttribute('href', cloud ? '#i-database' : '#i-lock');
 
@@ -1136,82 +1136,73 @@
     if (sessionBox) sessionBox.hidden = !(cloud && state.user);
     setText('sessionEmail', state.user && state.user.email ? state.user.email : '—');
 
-    setText('storageTitle', cloud ? 'Armazenamento na nuvem' : 'Armazenamento local');
+    setText('storageTitle', cloud ? 'Registros na nuvem' : 'Registros deste navegador');
     setText(
       'storageSubtitle',
       cloud
-        ? 'Conta autenticada, origem dos dados, backup e limpeza.'
-        : 'Dados desta versão, backup e limpeza.'
+        ? 'Conta ativa, origem dos dados, backup e limpeza.'
+        : 'Dados salvos neste navegador, backup e limpeza.'
     );
     setText(
       'storageDescription',
       cloud
-        ? 'Os registros são lidos e gravados no Supabase. O navegador mantém apenas a sessão ' +
-            'e os registros antigos do modo local, que podem ser migrados sem serem apagados.'
-        : 'O localStorage guarda os dados apenas neste navegador, neste computador. Ele não é ' +
-            'um banco de dados institucional: não oferece controle de acesso, auditoria ou ' +
-            'compartilhamento entre máquinas.'
+        ? 'Os registros são salvos na sua conta e protegidos pelo login. Faça backup regularmente.'
+        : 'Os registros ficam salvos neste navegador. Faça backup em arquivo e guarde em local seguro.'
     );
     setText('storageUsageLabel', cloud ? 'Origem dos dados' : 'Espaço aproximado');
     setText(
       'backupHelp',
-      cloud
-        ? 'O backup JSON continua disponível como cópia de segurança. Importar um backup na ' +
-            'nuvem mescla e atualiza os registros por identificador, sem apagar os existentes.'
-        : 'O backup é um arquivo JSON com todos os registros e a identificação da escola. ' +
-            'A importação substitui os dados atuais deste navegador após confirmação.'
+      'O backup é um arquivo de segurança com todos os registros e a identificação da escola. ' +
+        'A importação substitui os dados atuais após confirmação.'
     );
-    setText('dangerTitle', cloud ? 'Apagar dados da nuvem' : 'Apagar todos os dados');
+    setText('dangerTitle', 'Apagar meus dados');
     setText(
       'dangerText',
       cloud
-        ? 'Remove observações e configurações desta conta no Supabase. Os registros antigos ' +
-            'deste navegador são preservados.'
-        : 'Remove observações e configurações deste navegador. Esta ação não pode ser desfeita.'
+        ? 'Remove os registros e as configurações desta conta. Os registros salvos neste navegador são preservados.'
+        : 'Remove os registros e as configurações deste navegador. Esta ação não pode ser desfeita.'
     );
-    setText('dangerButtonLabel', cloud ? 'Apagar dados da nuvem' : 'Apagar dados');
+    setText('dangerButtonLabel', 'Apagar meus dados');
 
     setText(
       'sidebarStorageNote',
       cloud
-        ? 'Sessão autenticada: os registros são protegidos por login e pelas políticas RLS do Supabase.'
-        : 'Nesta versão local, os dados ficam salvos apenas neste navegador e não são compartilhados automaticamente.'
+        ? 'Sessão ativa: os registros ficam protegidos pelo login desta conta.'
+        : 'Os dados ficam salvos apenas neste navegador e não são compartilhados automaticamente.'
     );
 
     setText(
       'privacyItemExternal',
       cloud
-        ? 'Os registros são enviados ao Supabase somente quando você está autenticado e com conexão. Não há sincronização offline fictícia.'
-        : 'Os registros não são enviados a serviços externos nesta versão.'
+        ? 'Os registros são salvos na sua conta e enviados ao servidor somente quando você está autenticado e com conexão.'
+        : 'Os registros ficam neste navegador e não são compartilhados com outras pessoas.'
     );
     setText(
       'privacyItemBrowser',
       cloud
-        ? 'O acesso depende da sua conta e das políticas RLS do banco. Ao usar computadores compartilhados, encerre a sessão ao terminar.'
-        : 'Qualquer pessoa com acesso a este navegador e a este computador pode consultar os dados armazenados.'
+        ? 'O acesso depende da sua conta. Ao usar computadores compartilhados, encerre a sessão ao terminar.'
+        : 'Qualquer pessoa com acesso a este navegador e a este computador pode consultar os dados salvos.'
     );
     setText(
       'privacyItemBackup',
-      cloud
-        ? 'Exporte backups regularmente. O backup JSON é independente do banco e deve ser guardado em local seguro.'
-        : 'Exporte backups regularmente e guarde o arquivo em local seguro.'
+      'Exporte backups regularmente e guarde o arquivo em local seguro.'
     );
     setText(
       'pwaSecurityItem',
       cloud
-        ? 'O PWA não substitui o login nem as permissões do banco. Offline, o cache contém apenas arquivos da interface; os registros da nuvem não podem ser consultados nem gravados.'
-        : 'O PWA não oferece login, autenticação nem proteção institucional. Qualquer pessoa com acesso a este navegador pode consultar os dados locais.'
+        ? 'O aplicativo não substitui o login. Offline, o cache guarda apenas os arquivos do sistema.'
+        : 'O aplicativo não substitui o login nem a proteção institucional. Qualquer pessoa com acesso a este navegador pode consultar os dados salvos.'
     );
     setText(
       'helpPrivacyNote',
       cloud
-        ? 'Os registros são armazenados no Supabase e protegidos por login e RLS. O cache offline guarda apenas a interface. Exporte backups e encerre a sessão em computadores compartilhados.'
-        : 'Os dados desta versão ficam no armazenamento local deste navegador. Faça backup em Configurações e não use o sistema como único repositório institucional. O PWA não oferece login nem proteção institucional.'
+        ? 'Os registros são salvos na sua conta e protegidos pelo login. Exporte backups e encerre a sessão em computadores compartilhados.'
+        : 'Os dados ficam salvos neste navegador. Faça backup em Configurações e não use o sistema como único repositório institucional. O aplicativo não substitui o login nem a proteção institucional.'
     );
 
     setText(
       'dataNoteTitle',
-      cloud ? 'Sobre os dados da sua conta' : 'Sobre os dados desta versão'
+      cloud ? 'Sobre os dados da sua conta' : 'Sobre os dados deste navegador'
     );
     setText(
       'statHintRecords',
@@ -1220,37 +1211,27 @@
     setText(
       'dataNoteText',
       cloud
-        ? 'Os registros ficam na sua conta no Supabase, protegidos por login e pelas políticas RLS. Eles não são compartilhados com outras contas.'
-        : 'Os registros ficam no armazenamento local deste navegador. Eles não são enviados a servidores nem compartilhados com outros computadores.'
+        ? 'Os registros ficam na sua conta e são protegidos pelo login. Eles não são compartilhados com outras contas.'
+        : 'Os registros ficam salvos neste navegador e não são compartilhados com outras pessoas.'
     );
     setText(
       'historyDescription',
       cloud
-        ? 'Pesquise, filtre, abra e edite os registros da sua conta no Supabase.'
+        ? 'Pesquise, filtre, abra e edite os registros salvos na sua conta.'
         : 'Pesquise, filtre, abra e edite os registros salvos neste navegador.'
     );
     setText(
       'settingsDescription',
-      cloud
-        ? 'Identificação da escola, conta, nuvem, backup e informações sobre o armazenamento.'
-        : 'Identificação da escola, backup e informações sobre o armazenamento local.'
+      'Identificação da escola, cadastro de professores, grupos da Educação Infantil e organização dos dados.'
     );
     setText(
       'pwaStorageItem',
-      cloud
-        ? 'Atualizações: quando houver uma nova versão, o sistema avisa. Atualizar não apaga a sessão nem os registros da sua conta no Supabase.'
-        : 'Atualizações: quando houver uma nova versão, o sistema avisa. Atualizar não apaga os registros salvos no localStorage.'
+      'Atualizações: quando houver uma nova versão, o sistema avisa. A atualização mantém os dados salvos.'
     );
     setText(
       'futureText',
-      cloud
-        ? 'A versão 2.0.0 usa Supabase Auth (com cadastro público) e PostgreSQL com Row Level Security. A análise ' +
-            'continua baseada em regras explícitas de JavaScript e exige revisão humana. ' +
-            'Não há sincronização offline fictícia nem integração com IA.'
-        : 'Esta versão foi organizada em camadas simples (configuração, armazenamento, análise, ' +
-            'relatório e interface). Para uso institucional, configure a integração com o ' +
-            'Supabase descrita em INSTRUCOES_SUPABASE.md. Nenhuma integração fictícia com ' +
-            'servidores ou inteligência artificial foi implementada.'
+      'Esta versão usa regras claras para a análise e exige revisão humana antes de gerar o relatório. ' +
+        'Não há integração com inteligência artificial nem sincronização automática.'
     );
 
     const footer = $('appFooterText');
@@ -1259,9 +1240,7 @@
         'ObservaEdu · Versão ' +
         (CONFIG.version || '2.0.0') +
         ' · ' +
-        (cloud
-          ? 'Registros salvos na nuvem (Supabase).'
-          : 'Dados salvos apenas neste navegador.');
+        (cloud ? 'Registros salvos na sua conta.' : 'Dados salvos neste navegador.');
     }
 
     const cloudCard = $('cloudCard');
@@ -1476,7 +1455,7 @@
         ? id
           ? 'Professor(a) atualizado(a). As observações antigas mantêm o histórico.'
           : 'Professor(a) cadastrado(a).'
-        : 'Cadastro atualizado(a) apenas nesta sessão: o armazenamento não confirmou a gravação.',
+        : 'Cadastro atualizado(a) apenas nesta sessão. A confirmação no servidor não foi recebida.',
       saved ? 'success' : 'error'
     );
   }
@@ -1680,7 +1659,7 @@
       badgeClass = 'badge badge--positive';
       message =
         'O ObservaEdu está aberto como aplicativo instalado. Os arquivos da interface ficam em cache para uso offline depois do primeiro carregamento; ' +
-        'os registros permanecem no armazenamento local deste navegador.';
+        'os dados permanecem salvos neste navegador.';
     } else if (canInstall) {
       badgeText = 'Pronto para instalar';
       badgeClass = 'badge badge--positive';
@@ -1804,8 +1783,8 @@
       updatePwaUi();
       showToast(
         state.mode === 'cloud'
-          ? 'ObservaEdu instalado. Os registros continuam na sua conta no Supabase.'
-          : 'ObservaEdu instalado. Os registros continuam salvos apenas neste navegador.',
+          ? 'ObservaEdu instalado. Seus dados continuam salvos na sua conta.'
+          : 'ObservaEdu instalado. Seus dados continuam salvos neste navegador.',
         'success'
       );
     });
@@ -2044,9 +2023,8 @@
           ? $('appBannerMessage').textContent || ''
           : '';
       const status = Auth && typeof Auth.configuration === 'function' ? Auth.configuration() : null;
-      const baseNotice =
-        'Modo local: os dados ficam apenas neste navegador e não são sincronizados com a nuvem.';
-      const notice = baseNotice + (status && status.reason ? ' ' + status.reason : '');
+      const baseNotice = 'Modo local: os dados ficam apenas neste navegador.';
+      const notice = baseNotice;
       // O aviso do modo local já vem no HTML para evitar deslocamento de
       // layout. Se ele já estiver na tela, substitui pelo texto completo;
       // se houver outro aviso (armazenamento), acrescenta sem apagar.
@@ -3419,7 +3397,7 @@
     showToast(
       saved
         ? 'Professor removido da lista ativa. O histórico foi preservado.'
-        : 'Remoção aplicada apenas nesta sessão: o armazenamento não confirmou a gravação.',
+        : 'Remoção aplicada apenas nesta sessão. A confirmação no servidor não foi recebida.',
       saved ? 'success' : 'error'
     );
   }
@@ -3431,7 +3409,7 @@
     if (state.form) syncTeacherSelect(state.form);
     renderPerformance();
     showToast(
-      saved ? 'Professor reativado na lista.' : 'Reativação aplicada apenas nesta sessão.',
+      saved ? 'Professor reativado na lista.' : 'Reativação aplicada apenas nesta sessão. A confirmação no servidor não foi recebida.',
       saved ? 'success' : 'error'
     );
   }
@@ -3593,18 +3571,14 @@
 
     if (saved) {
       showToast(
-        state.mode === 'cloud'
-          ? 'Configurações salvas no servidor. A identificação da escola e o nome do observador serão usados nos próximos registros.'
-          : 'Configurações salvas. A identificação da escola e o nome do observador serão usados nos próximos registros.',
+        'Configurações salvas. A identificação da escola e o nome do orientador serão usados nos próximos registros.',
         'success'
       );
       return;
     }
 
     showToast(
-      state.mode === 'cloud'
-        ? 'As configurações valem apenas nesta sessão: o servidor não confirmou a gravação.'
-        : 'Configurações aplicadas apenas nesta sessão. Não foi possível gravar no navegador.',
+      'Não foi possível salvar as configurações. Elas valem apenas nesta sessão; tente novamente quando a conexão voltar.',
       'error'
     );
   }
@@ -3634,7 +3608,7 @@
     downloadBackup(backup, 'observaedu-backup-');
 
     showToast(
-      (state.mode === 'cloud' ? 'Backup dos registros da nuvem exportado com ' : 'Backup exportado com ') +
+      (state.mode === 'cloud' ? 'Backup da conta exportado com ' : 'Backup exportado com ') +
         state.observations.length +
         ' ' +
         plural(state.observations.length, 'registro', 'registros') +
@@ -3686,7 +3660,7 @@
     const cloud = state.mode === 'cloud';
 
     const confirmed = await askConfirm({
-      title: cloud ? 'Importar backup para a nuvem' : 'Importar backup',
+      title: cloud ? 'Importar backup' : 'Importar backup',
       message: cloud
         ? 'O arquivo contém ' +
           records.length +
@@ -3694,7 +3668,8 @@
           plural(records.length, 'registro', 'registros') +
           ' (exportado em ' +
           exportedAt +
-          '). A importação vai MESCLAR os registros por identificador no Supabase: ' +
+          '). A importação vai combinar os registros por identificador: ' +
+
           'itens com o mesmo id serão atualizados e os demais serão mantidos. ' +
           (hasSettings ? 'As configurações da escola do arquivo também serão gravadas. ' : '') +
           'Nada será apagado automaticamente. Deseja continuar?'
@@ -3738,7 +3713,7 @@
         );
         showBanner(
           (result.errors && result.errors[0] && result.errors[0].error) ||
-            'Alguns registros não foram gravados no servidor. Nenhum dado local foi apagado.'
+            'Alguns registros não puderam ser salvos. Nenhum dado local foi apagado.'
         );
         return;
       }
@@ -3806,15 +3781,11 @@
   async function handleClearData() {
     const cloud = state.mode === 'cloud';
     const confirmed = await askConfirm({
-      title: cloud ? 'Apagar dados da nuvem' : 'Apagar todos os dados',
+      title: 'Apagar meus dados',
       message: cloud
-        ? 'Todos os registros e configurações desta conta no Supabase serão apagados. ' +
-          'Os registros antigos salvos neste navegador serão PRESERVADOS e continuarão ' +
-          'disponíveis para migração. Esta ação não pode ser desfeita. Recomendamos exportar ' +
-          'um backup antes. Deseja continuar?'
-        : 'Todos os registros e configurações deste navegador serão apagados. ' +
-          'Esta ação não pode ser desfeita. Recomendamos exportar um backup antes. Deseja continuar?',
-      confirmLabel: cloud ? 'Apagar dados da nuvem' : 'Apagar todos os dados',
+        ? 'Todos os registros e configurações desta conta serão apagados. Os registros salvos neste navegador serão PRESERVADOS e continuarão disponíveis para migração. Esta ação não pode ser desfeita. Recomendamos exportar um backup antes. Deseja continuar?'
+        : 'Todos os registros e configurações deste navegador serão apagados. Esta ação não pode ser desfeita. Recomendamos exportar um backup antes. Deseja continuar?',
+      confirmLabel: 'Apagar meus dados',
       danger: true
     });
     if (!confirmed) return;
@@ -3823,10 +3794,10 @@
       const result = await Storage.clearCloudData();
       if (!result.ok) {
         showBanner(
-          (result.error || 'Não foi possível apagar os dados da nuvem.') +
+          (result.error || 'Não foi possível apagar os dados desta conta.') +
             ' Nenhum registro foi removido da interface.'
         );
-        showToast('A nuvem não confirmou a limpeza. Tente novamente.', 'error');
+        showToast('Não foi possível confirmar a exclusão. Tente novamente.', 'error');
         return;
       }
 
@@ -3851,7 +3822,7 @@
       renderSettings();
       applyModeUi();
       showToast(
-        'Dados da nuvem apagados. Os registros locais deste navegador foram preservados.',
+        'Dados da conta apagados. Os registros salvos neste navegador foram preservados.',
         'success'
       );
       return;
@@ -3882,7 +3853,7 @@
       showToast('Todos os dados deste navegador foram apagados.', 'success');
     } else {
       showBanner(
-        (result.error || 'Não foi possível apagar os dados do armazenamento.') +
+        (result.error || 'Não foi possível apagar os dados deste navegador.') +
           ' Os dados desta sessão foram removidos da memória; recarregue a página para conferir o navegador.'
       );
       showToast('Dados da sessão removidos, mas o navegador não confirmou a limpeza.', 'error');
@@ -3895,7 +3866,7 @@
 
   async function handleMigrateLocal() {
     if (state.mode !== 'cloud') {
-      showToast('A migração exige a integração com o Supabase configurada e uma sessão ativa.', 'warning');
+      showToast('A migração está disponível apenas para contas com dados salvos na nuvem.', 'warning');
       return;
     }
     if (state.migrationBusy) return;
@@ -3922,8 +3893,8 @@
         count +
         ' ' +
         plural(count, 'registro local', 'registros locais') +
-        '. Eles serão validados e enviados ao Supabase. Registros com o mesmo identificador ' +
-        'já existente na nuvem serão ignorados. Os dados locais NÃO serão apagados e você ' +
+        '. Eles serão validados e salvos na sua conta. Registros com o mesmo identificador ' +
+        'já existentes serão ignorados. Os dados locais não serão apagados e você ' +
         'pode continuar usando o sistema durante a migração. Deseja migrar agora?',
       confirmLabel: 'Migrar para a nuvem'
     });
@@ -4900,7 +4871,7 @@
         showBanner(
           (result && result.error
             ? result.error
-            : 'O servidor não confirmou a gravação do registro.') +
+            : 'Não foi possível confirmar a gravação do registro.') +
             ' O conteúdo permanece no formulário e na memória desta sessão; ' +
             'use "Salvar rascunho" novamente quando a conexão voltar.'
         );
@@ -4930,7 +4901,7 @@
       showToast(
         state.mode === 'cloud'
           ? 'A gravação no servidor NÃO foi confirmada. O conteúdo continua neste formulário; tente novamente.'
-          : 'Não foi possível gravar no armazenamento do navegador. Os dados continuam apenas nesta sessão.',
+          : 'Não foi possível salvar o rascunho neste navegador. Os dados continuam apenas nesta sessão.',
         'error'
       );
       return;
@@ -5535,7 +5506,7 @@
           el(
             'p',
             null,
-            'A última gravação deste registro NÃO foi confirmada pelo servidor. ' +
+            'A última gravação deste registro não foi confirmada. ' +
               'O documento foi montado com os dados desta sessão. Exporte um backup e use ' +
               '"Salvar rascunho" novamente quando a conexão voltar.'
           )
@@ -5547,7 +5518,7 @@
           el(
             'p',
             null,
-            'Este relatório está disponível na memória desta sessão, mas o navegador não confirmou a gravação no armazenamento local. Exporte um backup antes de fechar a página.'
+            'Este relatório está disponível apenas nesta sessão; exporte um backup antes de fechar a página.'
           )
         );
       } else {
@@ -5572,7 +5543,7 @@
 
     if (hadData && !saved && state.mode === 'cloud') {
       showToast(
-        'Prévia gerada, mas a gravação no servidor NÃO foi confirmada. O conteúdo continua no formulário.',
+        'Prévia gerada, mas a gravação não foi confirmada. O conteúdo continua no formulário.',
         'error'
       );
       return;
@@ -5624,19 +5595,12 @@
     openReportForRecord(state.form);
 
     if (saved) {
-      showToast(
-        state.mode === 'cloud'
-          ? 'Observação concluída e gravada no servidor. Relatório gerado.'
-          : 'Observação concluída e relatório gerado.',
-        'success'
-      );
+      showToast('Observação concluída e relatório gerado.', 'success');
       return;
     }
 
     showToast(
-      state.mode === 'cloud'
-        ? 'Relatório gerado nesta sessão, mas o servidor NÃO confirmou a conclusão. Use "Salvar rascunho" para tentar novamente.'
-        : 'Relatório gerado, mas não foi possível gravar o registro no navegador.',
+      'Relatório gerado, mas a conclusão não foi confirmada. Use "Salvar rascunho" para tentar novamente.',
       'error'
     );
   }
@@ -5787,7 +5751,8 @@
         formatDateBR(record.identificacao && record.identificacao.data) +
         ')?' +
         (state.mode === 'cloud'
-          ? ' O registro será removido do servidor Supabase.'
+          ? ' O registro será removido da sua conta.'
+
           : ' Esta ação não pode ser desfeita.'),
       confirmLabel: 'Excluir registro',
       danger: true

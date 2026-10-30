@@ -38,12 +38,12 @@ window.ObservaEduStorage = (function () {
   function friendlyError(error) {
     const text = String(error && (error.name || error.message) || error || '');
     if (/quota|exceeded|full/i.test(text)) {
-      return 'O armazenamento do navegador está cheio. Exporte um backup e remova observações antigas antes de continuar.';
+      return 'O espaço disponível neste navegador está cheio. Exporte um backup e tente novamente.';
     }
     if (/security|denied|blocked|not allowed/i.test(text)) {
-      return 'O navegador bloqueou o acesso ao armazenamento local. Verifique as permissões ou o modo de navegação privada.';
+      return 'O navegador bloqueou o acesso aos dados. Verifique as permissões ou o modo de navegação privada.';
     }
-    return 'Não foi possível acessar o armazenamento local deste navegador.';
+    return 'Não foi possível acessar os dados deste navegador.';
   }
 
   function checkAvailability() {
@@ -139,7 +139,7 @@ window.ObservaEduStorage = (function () {
       return {
         ok: false,
         data: [],
-        error: 'O armazenamento de observações está em um formato inesperado. Nenhum dado foi apagado.'
+        error: 'Os dados estão em um formato inesperado. Nenhum dado foi apagado.'
       };
     }
     return { ok: true, data: result.data, warning: result.warning };
@@ -235,8 +235,7 @@ window.ObservaEduStorage = (function () {
     return {
       ok: false,
       error:
-        'O Supabase não está configurado. Informe a chave pública em supabase-config.js ' +
-        'e recarregue a página.',
+        'A conexão com a conta não está configurada. Informe a chave pública do projeto e recarregue a página.',
       mode: 'cloud'
     };
   }
@@ -323,7 +322,7 @@ window.ObservaEduStorage = (function () {
         ok: false,
         error:
           local.error ||
-          'Não foi possível ler os registros locais. Nada foi enviado para a nuvem.',
+          'Não foi possível ler os registros locais. Nada foi enviado.',
         localCount: 0,
         imported: 0,
         skipped: 0,
