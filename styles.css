@@ -3206,8 +3206,89 @@ input[type="time"] {
   margin: 0;
 }
 
-.toast-container {
-  position: fixed;
+/* Pré-visualização de impressão */
+.print-preview-dialog {
+  width: 100%;
+  max-width: none;
+  border: 0;
+  padding: 0;
+  background: transparent;
+}
+
+.print-preview-shell {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  align-items: center;
+  padding: 20px 0;
+}
+
+.print-preview-toolbar {
+  width: 100%;
+  max-width: 210mm;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.print-preview-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.print-preview-pages {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  align-items: center;
+}
+
+.print-preview-pages .report-document {
+  width: 210mm;
+  min-height: 297mm;
+  padding: 18mm 16mm;
+  background: #fff;
+  box-shadow: 0 8px 30px rgba(15, 23, 42, 0.18);
+  border-radius: 4px;
+  box-sizing: border-box;
+  margin: 0;
+}
+
+@media print {
+  .print-preview-dialog {
+    position: static !important;
+    display: block !important;
+    background: transparent !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    border: 0 !important;
+    box-shadow: none !important;
+    max-width: none !important;
+    width: auto !important;
+  }
+  .print-preview-toolbar {
+    display: none !important;
+  }
+  .print-preview-shell {
+    padding: 0 !important;
+    gap: 0 !important;
+  }
+  .print-preview-pages {
+    display: block !important;
+    gap: 0 !important;
+    padding: 0 !important;
+  }
+  .print-preview-pages .report-document {
+    box-shadow: none !important;
+    border-radius: 0 !important;
+    width: auto !important;
+    min-height: 0 !important;
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+}
   right: calc(22px + var(--safe-right));
   bottom: calc(22px + var(--safe-bottom));
   z-index: 1200;
@@ -3899,6 +3980,8 @@ input[type="time"] {
 }
 
 .report-page-break {
+  display: block;
+  height: 1px;
   page-break-before: always;
   break-before: page;
 }
@@ -5103,7 +5186,9 @@ body.auth-locked {
 }
 
 @media print {
-  .auth-gate {
+  body.print-preview-open #view-report {
+    display: none !important;
+  }
     display: none !important;
   }
 

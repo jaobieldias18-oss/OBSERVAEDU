@@ -849,9 +849,9 @@
         showBanner(
           (result.error ||
             (result.failed
-              ? result.failed + ' registro(s) não foram gravados no servidor.'
+              ? result.failed + ' registro(s) não puderam ser salvos.'
               : 'Não foi possível gravar os dados na sua conta.')) +
-            ' Os dados desta sessão permanecem na interface, mas a gravação no servidor NÃO foi confirmada.'
+            ' Os dados desta sessão permanecem na interface, mas a gravação não foi confirmada.'
         );
         updateStoragePanel();
         return false;
@@ -1143,7 +1143,7 @@
     setText(
       'storageSubtitle',
       cloud
-        ? 'Conta ativa, origem dos dados, backup e limpeza.'
+        ? 'Conta ativa, backup e limpeza.'
         : 'Dados salvos neste navegador, backup e limpeza.'
     );
     setText(
@@ -1177,7 +1177,7 @@
     setText(
       'privacyItemExternal',
       cloud
-        ? 'Os registros são salvos na sua conta e enviados ao servidor somente quando você está autenticado e com conexão.'
+        ? 'Os registros são salvos na sua conta e enviados ao servidor apenas quando você está conectado.'
         : 'Os registros ficam neste navegador e não são compartilhados com outras pessoas.'
     );
     setText(
@@ -1193,8 +1193,8 @@
     setText(
       'pwaSecurityItem',
       cloud
-        ? 'O aplicativo não substitui o login. Offline, o cache guarda apenas os arquivos do sistema.'
-        : 'O aplicativo não substitui o login nem a proteção institucional. Qualquer pessoa com acesso a este navegador pode consultar os dados salvos.'
+        ? 'O aplicativo não substitui o login. Offline, os arquivos do sistema ficam salvos no dispositivo.'
+        : 'O aplicativo não substitui o login. Qualquer pessoa com acesso a este navegador pode consultar os dados salvos.'
     );
     setText(
       'helpPrivacyNote',
@@ -1293,7 +1293,7 @@
           ' ' +
           plural(count, 'registro local', 'registros locais') +
           ' neste navegador. A migração valida e envia os itens ausentes; registros com o ' +
-          'mesmo identificador na nuvem são ignorados e nada é apagado do navegador.'
+          'mesmo identificador são ignorados e nada é apagado do navegador.'
         : 'Não há registros locais antigos neste navegador para migrar.';
     }
 
@@ -1488,6 +1488,37 @@
     }
 
     if (settingsForm) settingsForm.addEventListener('submit', handleSettingsSubmit);
+
+    const printPreviewBack = $('printPreviewBack');
+    const printPreviewPrint = $('printPreviewPrint');
+    const printPreviewDialog = $('printPreviewDialog');
+    if (printPreviewBack) {
+      printPreviewBack.addEventListener('click', function () {
+        if (printPreviewDialog && typeof printPreviewDialog.close === 'function') {
+          printPreviewDialog.close();
+        } else if (printPreviewDialog) {
+          printPreviewDialog.removeAttribute('open');
+        }
+        document.body.classList.remove('print-preview-open');
+      });
+    }
+    if (printPreviewDialog) {
+      printPreviewDialog.addEventListener('close', function () {
+        document.body.classList.remove('print-preview-open');
+      });
+    }
+    if (printPreviewPrint) {
+      printPreviewPrint.addEventListener('click', function () {
+        const record = getCurrentReportRecord();
+        const identification = (record && record.identificacao) || {};
+        const title =
+          'Relatório - ' +
+          (clean(identification.professor) || 'observação pedagógica') +
+          ' - ' +
+          (clean(identification.data) ? formatDateBR(identification.data) : 'sem data');
+        printDocument(title);
+      });
+    }
     if (importFileInput) importFileInput.addEventListener('change', handleImportFile);
 
     const historySearch = $('historySearch');
@@ -5068,7 +5099,7 @@
     if (!saved) {
       showToast(
         state.mode === 'cloud'
-          ? 'A gravação no servidor NÃO foi confirmada. O conteúdo continua neste formulário; tente novamente.'
+          ? 'Não foi possível confirmar a gravação. O conteúdo continua neste formulário; tente novamente.'
           : 'Não foi possível salvar o rascunho neste navegador. Os dados continuam apenas nesta sessão.',
         'error'
       );
@@ -5836,13 +5867,32 @@
       return;
     }
 
-    const identification = record.identificacao || {};
-    const title =
-      'Relatório - ' +
-      (clean(identification.professor) || 'observação pedagógica') +
-      ' - ' +
-      (clean(identification.data) ? formatDateBR(identification.data) : 'sem data');
-    printDocument(title);
+    const container = $('printPreviewPages');
+    const dialog = $('printPreviewDialog');
+    if (!container || !dialog) {
+      // Fallback: impressão nativa.
+      const identification = record.identificacao || {};
+      const title =
+        'Relatório - ' +
+        (clean(identification.professor) || 'observação pedagógica') +
+        ' - ' +
+        (clean(identification.data) ? formatDateBR(identification.data) : 'sem data');
+      printDocument(title);
+      return;
+    }
+
+    const source = $('reportDocumentContainer');
+    clearNode(container);
+    if (source && source.firstElementChild) {
+      container.appendChild(source.firstElementChild.cloneNode(true));
+    }
+
+    if (typeof dialog.showModal === 'function') {
+      dialog.showModal();
+    } else {
+      dialog.setAttribute('open', '');
+    }
+    document.body.classList.add('print-preview-open');
   }
 
   function handlePrintRecord(id) {

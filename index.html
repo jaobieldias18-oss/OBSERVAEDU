@@ -1167,7 +1167,7 @@
               <div class="card-header">
                 <div>
                   <h3 class="card-title" id="cloudTitle">Conta e dados</h3>
-                  <p class="card-subtitle">Conta ativa, origem dos dados e migração.</p>
+                  <p class="card-subtitle">Conta ativa e migração de dados.</p>
                 </div>
                 <span class="badge badge--positive" id="cloudStatus">Conectado</span>
               </div>
@@ -1204,9 +1204,7 @@
                 </div>
               </div>
               <p class="field-help">
-                A migração é explícita: mostra a quantidade, pede confirmação, valida cada item,
-                ignora duplicados pelo identificador e informa quantos foram importados ou falharam.
-                Nenhum registro local é apagado automaticamente.
+                A migração é opcional e não apaga os dados deste navegador.
               </p>
             </section>
 
@@ -1223,9 +1221,9 @@
                 <li><strong>Android (Chrome ou Edge):</strong> abra o menu do navegador e escolha <em>Instalar aplicativo</em> ou <em>Adicionar à tela inicial</em>. O botão de instalação também aparece abaixo quando o navegador permite.</li>
                 <li><strong>iPhone e iPad (Safari):</strong> toque em <em>Compartilhar</em> e depois em <em>Adicionar à Tela de Início</em>. Outros navegadores no iOS podem não oferecer essa opção.</li>
                 <li><strong>Computador (Chrome ou Edge):</strong> use o ícone de instalação na barra de endereço ou o menu do navegador.</li>
-                <li><strong>Offline:</strong> funciona somente depois que o site já tiver sido aberto e armazenado em cache neste navegador. A primeira visita ainda precisa de internet.</li>
+                <li><strong>Offline:</strong> funciona após o primeiro acesso a este navegador.</li>
                 <li id="pwaStorageItem"><strong>Atualizações:</strong> quando houver uma nova versão, o sistema avisa. A atualização mantém os dados salvos.</li>
-                <li><strong>Segurança:</strong> <span id="pwaSecurityItem">O PWA não oferece login, autenticação nem proteção institucional. Qualquer pessoa com acesso a este navegador pode consultar os dados locais.</span></li>
+                <li><strong>Segurança:</strong> <span id="pwaSecurityItem">O aplicativo não substitui o login. Qualquer pessoa com acesso a este navegador pode consultar os dados salvos.</span></li>
               </ul>
               <div class="settings-button-row">
                 <button class="btn btn-secondary" type="button" id="pwaInstallButton" data-action="install-app" hidden>
@@ -1354,6 +1352,23 @@
   <!-- Ordem dos scripts:
        No <head>: biblioteca vendor -> supabase-config.js -> supabase.js (permite validação imediata da chave).
        No body: questions -> storage -> analysis -> performance -> report -> auth -> app. -->
+  <!-- Pré-visualização de impressão do relatório -->
+  <dialog class="modal modal--wide print-preview-dialog" id="printPreviewDialog" aria-labelledby="printPreviewTitle">
+    <div class="print-preview-shell">
+      <div class="print-preview-toolbar no-print">
+        <h2 class="modal-title" id="printPreviewTitle">Pré-visualização de impressão</h2>
+        <div class="print-preview-actions">
+          <button class="btn btn-ghost" type="button" id="printPreviewBack">Voltar</button>
+          <button class="btn btn-primary" type="button" id="printPreviewPrint">
+            <svg class="icon" aria-hidden="true"><use href="#i-printer"></use></svg>
+            <span>Imprimir / Salvar em PDF</span>
+          </button>
+        </div>
+      </div>
+      <div class="print-preview-pages" id="printPreviewPages"></div>
+    </div>
+  </dialog>
+
   <script src="questions.js?v=2.0.0"></script>
   <script src="storage.js?v=2.0.0"></script>
   <script src="analysis.js?v=2.0.0"></script>
