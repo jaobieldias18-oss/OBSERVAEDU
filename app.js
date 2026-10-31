@@ -1,4 +1,4 @@
-/*
+﻿/*
  * ObservaEdu — Interface e fluxo da aplicação
  * -------------------------------------------
  * Este arquivo liga o formulário, o armazenamento (local ou Supabase),
@@ -1472,8 +1472,16 @@
     const settingsForm = $('settingsForm');
     const importFileInput = $('importFileInput');
 
-    if (menuToggle) menuToggle.addEventListener('click', openSidebar);
+    if (menuToggle) menuToggle.addEventListener('click', function () {
+      if (document.body.classList.contains('sidebar-open')) {
+        closeSidebar();
+      } else {
+        openSidebar();
+      }
+    });
     if (sidebarBackdrop) sidebarBackdrop.addEventListener('click', closeSidebar);
+    const sidebarClose = $('sidebarClose');
+    if (sidebarClose) sidebarClose.addEventListener('click', closeSidebar);
     if (bannerDismiss) bannerDismiss.addEventListener('click', hideBanner);
 
     if (formPrev) {
