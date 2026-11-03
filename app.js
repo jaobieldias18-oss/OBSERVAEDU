@@ -2196,15 +2196,6 @@
     ongoingElement.textContent = String(ongoing);
     completedElement.textContent = String(completed);
 
-    const quickTeacherCount = $('quickTeacherCount');
-    if (quickTeacherCount) {
-      const directory = teacherDirectory();
-      quickTeacherCount.textContent =
-        directory.list.length +
-        ' ' +
-        plural(directory.list.length, 'professor no diretório', 'professores no diretório');
-    }
-
     clearNode(recentList);
     const recent = sortedObservations().slice(0, 5);
 
