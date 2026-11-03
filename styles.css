@@ -215,7 +215,7 @@ code {
 
 .app-sidebar {
   position: fixed;
-  inset: 0 auto 0 0;
+  inset: 0 0 0 auto;
   z-index: 50;
   width: var(--sidebar-width);
   display: flex;
@@ -226,8 +226,8 @@ code {
     calc(18px + var(--safe-right))
     calc(20px + var(--safe-bottom))
     calc(18px + var(--safe-left));
-  background: #fff;
-  border-right: 1px solid var(--border);
+  background: #0f2744;
+  border-left: 1px solid rgba(255, 255, 255, 0.08);
   overflow-y: auto;
   overscroll-behavior: contain;
   -webkit-overflow-scrolling: touch;
@@ -238,7 +238,7 @@ code {
   align-items: center;
   gap: 11px;
   padding: 0 6px 16px;
-  border-bottom: 1px solid var(--slate-100);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
 }
 
 .brand-mark {
@@ -263,13 +263,13 @@ code {
 }
 
 .brand-text strong {
-  color: var(--blue-900);
+  color: #fff;
   font-size: 18px;
   letter-spacing: -0.02em;
 }
 
 .brand-text span {
-  color: var(--muted);
+  color: rgba(255, 255, 255, 0.6);
   font-size: 11px;
   letter-spacing: 0.04em;
   text-transform: uppercase;
@@ -288,7 +288,7 @@ code {
 
 .nav-label {
   margin: 6px 10px 5px;
-  color: var(--slate-600);
+  color: rgba(255, 255, 255, 0.5);
   font-size: 10.5px;
   font-weight: 700;
   letter-spacing: 0.12em;
@@ -308,7 +308,7 @@ code {
   border: 1px solid transparent;
   border-radius: 10px;
   background: transparent;
-  color: var(--slate-600);
+  color: rgba(255, 255, 255, 0.85);
   font-size: 14px;
   font-weight: 600;
   text-align: left;
@@ -317,12 +317,12 @@ code {
 }
 
 .nav-item:hover {
-  background: var(--slate-50);
-  color: var(--blue-800);
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
 }
 
 .nav-item .icon {
-  color: var(--slate-400);
+  color: rgba(255, 255, 255, 0.7);
 }
 
 .nav-item:hover .icon {
@@ -330,13 +330,13 @@ code {
 }
 
 .nav-item.is-active {
-  background: var(--blue-50);
-  border-color: var(--blue-100);
-  color: var(--blue-800);
+  background: rgba(59, 130, 246, 0.25);
+  border-color: rgba(96, 165, 250, 0.4);
+  color: #fff;
 }
 
 .nav-item.is-active .icon {
-  color: var(--blue-700);
+  color: #93c5fd;
 }
 
 .nav-item--accent {
@@ -474,7 +474,7 @@ code {
 
 .app-body {
   width: calc(100% - var(--sidebar-width));
-  margin-left: var(--sidebar-width);
+  margin-right: var(--sidebar-width);
   display: flex;
   flex-direction: column;
   min-height: 100vh;
@@ -4076,7 +4076,7 @@ input[type="time"] {
   }
 
   .app-sidebar {
-    transform: translateX(-102%);
+    transform: translateX(102%);
     transition: transform 0.22s ease;
     box-shadow: var(--shadow-lg);
     width: min(86vw, 320px);
