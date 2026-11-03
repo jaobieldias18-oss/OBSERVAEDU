@@ -129,11 +129,8 @@ async function networkFirstNavigation(request) {
   }
 }
 
-async function cacheFirstStatic(request) {
+async function networkFirstStatic(request) {
   const cache = await caches.open(CACHE_NAME);
-  const cached = await cache.match(request);
-  if (cached) return cached;
-
   try {
     const response = await fetch(request);
     if (response && response.ok && response.type === 'basic') {
@@ -141,6 +138,8 @@ async function cacheFirstStatic(request) {
     }
     return response;
   } catch (error) {
+    const cached = await cache.match(request);
+    if (cached) return cached;
     return new Response('', { status: 504, statusText: 'Offline' });
   }
 }
@@ -190,6 +189,6 @@ self.addEventListener('fetch', function (event) {
   }
 
   if (isStaticAsset(request)) {
-    event.respondWith(cacheFirstStatic(request));
+    event.respondWith(networkFirstStatic(request));
   }
 });
