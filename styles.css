@@ -4113,6 +4113,7 @@ input[type="time"] {
 
   .app-body {
     width: 100%;
+    margin-right: 0;
     margin-left: 0;
   }
 
@@ -5188,8 +5189,6 @@ body.auth-locked {
 
 @media print {
   body.print-preview-open #view-report {
-    display: none !important;
-  }
     display: none !important;
   }
 
