@@ -21,7 +21,7 @@
 
 'use strict';
 
-const VERSION = '2.0.0';
+const VERSION = '2.0.1';
 const CACHE_NAME = 'observaedu-static-' + VERSION;
 
 const APP_SHELL = [
