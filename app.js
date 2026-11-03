@@ -37,7 +37,7 @@
   // Títulos exibidos na barra superior em cada tela.
   const VIEW_META = {
     dashboard: {
-      title: 'Painel',
+      title: 'Dashboard',
       subtitle: 'Visão geral das observações pedagógicas'
     },
     form: {
@@ -45,7 +45,7 @@
       subtitle: 'Registro, análise e relatório da observação'
     },
     history: {
-      title: 'Histórico',
+      title: 'Observações',
       subtitle: 'Pesquise, filtre e gerencie os registros salvos'
     },
     reports: {
@@ -1482,6 +1482,15 @@
     if (sidebarBackdrop) sidebarBackdrop.addEventListener('click', closeSidebar);
     const sidebarClose = $('sidebarClose');
     if (sidebarClose) sidebarClose.addEventListener('click', closeSidebar);
+
+    // Qualquer opção do menu fecha a gaveta no celular, inclusive as que
+    // abrem um diálogo em vez de trocar de aba (ex.: "Como usar").
+    const mainNav = document.querySelector('.main-nav');
+    if (mainNav) {
+      mainNav.addEventListener('click', function (event) {
+        if (event.target.closest('.nav-item')) closeSidebar();
+      });
+    }
     if (bannerDismiss) bannerDismiss.addEventListener('click', hideBanner);
 
     if (formPrev) {

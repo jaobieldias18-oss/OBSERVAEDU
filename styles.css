@@ -468,6 +468,92 @@ code {
   line-height: 1.35;
 }
 
+/* Blocos auxiliares da barra lateral no tema azul-marinho. Mantém o mesmo
+   conteúdo e as mesmas funções, apenas com contraste adequado ao fundo. */
+.app-sidebar .icon-btn {
+  color: rgba(255, 255, 255, 0.72);
+}
+
+.app-sidebar .icon-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+}
+
+.app-sidebar .link-button {
+  color: #93c5fd;
+}
+
+.app-sidebar .link-button:hover {
+  color: #bfdbfe;
+}
+
+.app-sidebar .sidebar-school {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.12);
+}
+
+.app-sidebar .sidebar-school-icon {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.12);
+  color: #93c5fd;
+}
+
+.app-sidebar .sidebar-school-name {
+  color: #fff;
+}
+
+.app-sidebar .sidebar-school-meta {
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.app-sidebar .sidebar-note {
+  background: rgba(59, 130, 246, 0.14);
+  border-color: rgba(96, 165, 250, 0.28);
+}
+
+.app-sidebar .sidebar-note .icon {
+  color: #93c5fd;
+}
+
+.app-sidebar .sidebar-note p {
+  color: rgba(255, 255, 255, 0.78);
+}
+
+.app-sidebar .sidebar-install {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.14);
+  color: #fff;
+}
+
+.app-sidebar .sidebar-install:hover {
+  border-color: rgba(147, 197, 253, 0.6);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.2);
+}
+
+.app-sidebar .sidebar-install .icon {
+  color: #93c5fd;
+}
+
+.app-sidebar .sidebar-install small {
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.app-sidebar .session-box {
+  background: rgba(16, 185, 129, 0.14);
+  border-color: rgba(16, 185, 129, 0.4);
+}
+
+.app-sidebar .session-label,
+.app-sidebar .session-user strong {
+  color: #bbf7d0;
+}
+
+.app-sidebar .session-box .btn {
+  background: rgba(255, 255, 255, 0.9);
+  border-color: transparent;
+  color: var(--green-800);
+}
+
 .sidebar-backdrop {
   display: none;
 }
