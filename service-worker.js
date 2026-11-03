@@ -50,6 +50,7 @@ const APP_SHELL = [
 const STATIC_DESTINATIONS = ['script', 'style', 'image', 'font', 'manifest'];
 
 self.addEventListener('install', function (event) {
+  self.skipWaiting();
   event.waitUntil(
     caches.open(CACHE_NAME).then(function (cache) {
       return cache.addAll(APP_SHELL);
