@@ -1,12 +1,13 @@
 /*
  * ObservaEdu — Documento curto entregue ao professor
  * ---------------------------------------------------
- * Relatório resumido, preferencialmente em uma página:
- * identificação (professor, turma, série, data), observações para o professor
- * e próximos passos somente quando o orientador tiver registrado.
+ * O documento tem duas páginas na impressão:
+ *   1. identificação (professor, turma, série, data), observações para o
+ *      professor e próximos passos somente quando o orientador registrou;
+ *   2. acompanhamento dos tópicos da aula, com as respostas observáveis.
  *
- * O histórico interno completo permanece na aplicação. Este documento não
- * inclui respostas das sete etapas, análises, indicadores nem diagnósticos.
+ * O histórico interno completo permanece na aplicação. O documento não
+ * inclui notas, rankings nem diagnósticos.
  *
  * Todo texto é inserido com textContent (nunca innerHTML).
  */
@@ -46,6 +47,51 @@ window.ObservaEduReport = (function () {
     const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(clean(isoDate));
     if (!match) return 'Não informado';
     return match[3] + '/' + match[2] + '/' + match[1];
+  }
+
+  function searchKey(value) {
+    return clean(value)
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase();
+  }
+
+  // Registros antigos podem guardar a resposta como texto simples, como
+  // { valor }, { value } ou com o rótulo já traduzido. A conversão abaixo
+  // mantém a mesma leitura para todos esses formatos.
+  function normalizeAnswer(value) {
+    const raw = clean(value);
+    if (!raw) return '';
+    const key = searchKey(raw);
+    const aliases = {
+      sim: 'sim',
+      parcial: 'parcial',
+      parcialmente: 'parcial',
+      nao: 'nao',
+      'nao observado': 'na',
+      'nao se aplica': 'na',
+      'nao foi possivel observar': 'na'
+    };
+    return aliases[key] || raw;
+  }
+
+  function entryValue(entry) {
+    if (entry && typeof entry === 'object') {
+      return normalizeAnswer(entry.valor || entry.value || entry.answer || '');
+    }
+    return normalizeAnswer(entry);
+  }
+
+  function answersSource(record) {
+    if (!record || typeof record !== 'object') return {};
+    const source = record.respostas || record.answers;
+    return source && typeof source === 'object' ? source : {};
+  }
+
+  function openingSource(record) {
+    if (!record || typeof record !== 'object') return {};
+    const source = record.abertura || record.opening;
+    return source && typeof source === 'object' ? source : {};
   }
 
   function formatTime(value) {
@@ -170,13 +216,8 @@ window.ObservaEduReport = (function () {
     const openingQuestions = CONFIG.openingQuestions || [];
     const openingLines = [];
     openingQuestions.forEach(function (question) {
-      const entry = record && record.abertura ? record.abertura[question.id] : null;
-      const value =
-        entry && typeof entry === 'object'
-          ? entry.valor
-          : typeof entry === 'string'
-          ? entry
-          : '';
+      const entry = openingSource(record)[question.id];
+      const value = entryValue(entry);
       const option = (CONFIG.openingOptions || []).find(function (item) {
         return item.value === value;
       });
@@ -309,19 +350,18 @@ window.ObservaEduReport = (function () {
 
   function collectTopics(record) {
     const topics = [];
+    const answers = answersSource(record);
+    const opening = openingSource(record);
     function addTopic(text, answer) {
-      topics.push({ text: clean(text) || 'Tópico', answer: answer || '' });
+      const normalized = normalizeAnswer(answer);
+      topics.push({ text: clean(text) || 'Tópico', answer: normalized || '' });
     }
     (CONFIG.openingQuestions || []).forEach(function (question) {
-      const entry = record && record.abertura ? record.abertura[question.id] : null;
-      const value =
-        entry && typeof entry === 'object' ? entry.valor : typeof entry === 'string' ? entry : '';
-      addTopic(question.text, value);
+      addTopic(question.text, entryValue(opening[question.id]));
     });
     (CONFIG.sections || []).forEach(function (section) {
       (section.questions || []).forEach(function (question) {
-        const value = record && record.respostas ? record.respostas[question.id] : '';
-        addTopic(question.text, value);
+        addTopic(question.text, entryValue(answers[question.id]));
       });
     });
     return topics;

@@ -966,13 +966,50 @@
             <div id="performanceTeacherTable"></div>
           </section>
 
-          <section class="card performance-table-card" aria-labelledby="teacherHistoryTitle">
+          <section class="card performance-table-card teacher-history-card" aria-labelledby="teacherHistoryTitle">
             <div class="card-header">
               <div>
-                <h3 class="card-title" id="teacherHistoryTitle">Histórico individual</h3>
-                <p class="card-subtitle">Selecione um professor para ver o histórico, inclusive se ele não estiver mais na lista ativa.</p>
+                <h3 class="card-title" id="teacherHistoryTitle" tabindex="-1">Histórico individual</h3>
+                <p class="card-subtitle">Selecione um professor para consultar as observações concluídas e os registros em andamento. O identificador estável separa professores homônimos.</p>
               </div>
             </div>
+
+            <div class="teacher-history-controls">
+              <div class="field">
+                <label for="teacherHistoryTeacher">Professor</label>
+                <select id="teacherHistoryTeacher">
+                  <option value="">Selecione um professor</option>
+                </select>
+              </div>
+              <div class="field">
+                <label for="teacherHistoryYear">Ano</label>
+                <select id="teacherHistoryYear">
+                  <option value="">Todos os anos</option>
+                </select>
+              </div>
+              <div class="field">
+                <label for="teacherHistoryMonth">Mês</label>
+                <select id="teacherHistoryMonth">
+                  <option value="">Todos os meses</option>
+                </select>
+              </div>
+              <div class="field">
+                <label for="teacherHistoryTurma">Turma</label>
+                <select id="teacherHistoryTurma">
+                  <option value="">Todas as turmas</option>
+                </select>
+              </div>
+              <div class="field">
+                <label for="teacherHistoryOrder">Ordem</label>
+                <select id="teacherHistoryOrder">
+                  <option value="desc">Mais recentes primeiro</option>
+                  <option value="asc">Mais antigas primeiro</option>
+                </select>
+              </div>
+            </div>
+
+            <p class="teacher-history-hint">Professor, ano e turma também filtram os indicadores acima. Mês e ordem valem apenas para esta lista.</p>
+            <p class="teacher-history-scope" id="teacherHistoryScope"></p>
             <div id="teacherHistory"></div>
           </section>
         </section>
@@ -982,14 +1019,15 @@
           <div class="report-toolbar no-print">
             <button class="btn btn-ghost" type="button" data-action="back-to-reports">
               <svg class="icon" aria-hidden="true"><use href="#i-arrow-left"></use></svg>
-              <span>Voltar aos relatórios</span>
+              <span id="reportBackLabel">Voltar aos relatórios</span>
             </button>
+            <span class="badge badge--neutral report-readonly-badge" id="reportReadOnlyBadge" hidden>Consulta somente leitura</span>
             <div class="report-toolbar-actions">
-              <button class="btn btn-secondary" type="button" data-action="back-to-form">
+              <button class="btn btn-secondary" type="button" data-action="back-to-form" id="reportBackToFormButton">
                 <svg class="icon" aria-hidden="true"><use href="#i-edit"></use></svg>
                 <span>Voltar ao formulário</span>
               </button>
-              <button class="btn btn-secondary" type="button" data-action="edit-report">
+              <button class="btn btn-secondary" type="button" data-action="edit-report" id="reportEditButton">
                 <svg class="icon" aria-hidden="true"><use href="#i-sparkles"></use></svg>
                 <span>Editar relatório</span>
               </button>
@@ -1333,7 +1371,7 @@
           <button class="btn btn-ghost" type="button" id="printPreviewBack">Voltar</button>
           <button class="btn btn-primary" type="button" id="printPreviewPrint">
             <svg class="icon" aria-hidden="true"><use href="#i-printer"></use></svg>
-            <span>Imprimir / Salvar em PDF</span>
+            <span id="printPreviewPrintLabel">Imprimir / Salvar em PDF</span>
           </button>
         </div>
       </div>

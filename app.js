@@ -124,8 +124,17 @@
       to: ''
     },
 
+    performanceHistory: {
+      month: '',
+      order: 'desc'
+    },
+
     currentReportId: null,
-    reportSnapshot: null
+    reportSnapshot: null,
+    reportReturnView: 'reports',
+    reportReturnAnchor: '',
+    printPreviewKind: 'report',
+    printPreviewTitle: ''
   };
 
   let confirmResolver = null;
@@ -514,7 +523,8 @@
     (CONFIG.openingQuestions || []).forEach(function (question) {
       const entry = source[question.id];
       if (entry && typeof entry === 'object') {
-        const value = answerIsValid(entry.valor) ? entry.valor : '';
+        const candidate = entry.valor || entry.value || '';
+        const value = answerIsValid(candidate) ? candidate : '';
         abertura[question.id] = { valor: value, nota: stringValue(entry.nota) };
       } else if (answerIsValid(entry)) {
         // Compatibilidade com um eventual formato antigo que guardava só o valor.
@@ -568,7 +578,9 @@
 
     CONFIG.sections.forEach(function (section) {
       section.questions.forEach(function (question) {
-        const value = answers[question.id];
+        const entry = answers[question.id];
+        const value =
+          entry && typeof entry === 'object' ? entry.valor || entry.value || '' : entry;
         if (answerIsValid(value)) record.respostas[question.id] = value;
       });
       record.comentarios[section.id] = stringValue(comments[section.id]);
@@ -1522,17 +1534,22 @@
     if (printPreviewDialog) {
       printPreviewDialog.addEventListener('close', function () {
         document.body.classList.remove('print-preview-open');
+        state.printPreviewKind = 'report';
+        state.printPreviewTitle = '';
       });
     }
     if (printPreviewPrint) {
       printPreviewPrint.addEventListener('click', function () {
-        const record = getCurrentReportRecord();
-        const identification = (record && record.identificacao) || {};
-        const title =
-          'Relatório - ' +
-          (clean(identification.professor) || 'observação pedagógica') +
-          ' - ' +
-          (clean(identification.data) ? formatDateBR(identification.data) : 'sem data');
+        let title = clean(state.printPreviewTitle);
+        if (!title) {
+          const record = getCurrentReportRecord();
+          const identification = (record && record.identificacao) || {};
+          title =
+            'Relatório - ' +
+            (clean(identification.professor) || 'observação pedagógica') +
+            ' - ' +
+            (clean(identification.data) ? formatDateBR(identification.data) : 'sem data');
+        }
         printDocument(title);
       });
     }
@@ -1574,10 +1591,13 @@
 
     const performanceMap = {
       performanceTeacher: 'teacherGroup',
+      teacherHistoryTeacher: 'teacherGroup',
       performanceYear: 'year',
+      teacherHistoryYear: 'year',
       performanceEtapa: 'etapa',
       performanceSerie: 'serie',
       performanceTurma: 'turma',
+      teacherHistoryTurma: 'turma',
       performanceFrom: 'from',
       performanceTo: 'to'
     };
@@ -1592,6 +1612,22 @@
         renderPerformance();
       });
     });
+
+    const historyMonth = $('teacherHistoryMonth');
+    if (historyMonth) {
+      historyMonth.addEventListener('change', function () {
+        state.performanceHistory.month = historyMonth.value;
+        renderPerformance();
+      });
+    }
+
+    const historyOrder = $('teacherHistoryOrder');
+    if (historyOrder) {
+      historyOrder.addEventListener('change', function () {
+        state.performanceHistory.order = historyOrder.value === 'asc' ? 'asc' : 'desc';
+        renderPerformance();
+      });
+    }
 
     const confirmOk = $('confirmOk');
     const confirmCancel = $('confirmCancel');
@@ -2619,31 +2655,78 @@
     return teacherDirectory().list;
   }
 
-  function syncPerformanceControls(options) {
+  function performanceClassOptions() {
+    const values = [];
+    const seen = new Set();
+    function add(value) {
+      const text = clean(value);
+      if (!text || seen.has(text)) return;
+      seen.add(text);
+      values.push(text);
+    }
+    (CONFIG.classOptions || []).forEach(add);
+    // Registros antigos podem ter a turma como texto livre.
+    uniqueValues('turma').forEach(add);
+    return values;
+  }
+
+  const PERFORMANCE_MONTH_OPTIONS = [
+    { value: '01', label: 'Janeiro' },
+    { value: '02', label: 'Fevereiro' },
+    { value: '03', label: 'Março' },
+    { value: '04', label: 'Abril' },
+    { value: '05', label: 'Maio' },
+    { value: '06', label: 'Junho' },
+    { value: '07', label: 'Julho' },
+    { value: '08', label: 'Agosto' },
+    { value: '09', label: 'Setembro' },
+    { value: '10', label: 'Outubro' },
+    { value: '11', label: 'Novembro' },
+    { value: '12', label: 'Dezembro' }
+  ];
+
+  function syncPerformanceControls() {
     const teacherSelect = $('performanceTeacher');
+    const historyTeacherSelect = $('teacherHistoryTeacher');
     const etapaSelect = $('performanceEtapa');
     const fromInput = $('performanceFrom');
     const toInput = $('performanceTo');
 
-    if (teacherSelect && !(options && options.skipTeacher)) {
-      clearNode(teacherSelect);
-      const all = el('option', null, 'Todos os professores');
+    const teacherSelects = [
+      { node: teacherSelect, allLabel: 'Todos os professores' },
+      { node: historyTeacherSelect, allLabel: 'Selecione um professor' }
+    ];
+    let teacherValid = false;
+    teacherSelects.forEach(function (item) {
+      if (!item.node) return;
+      clearNode(item.node);
+      const all = el('option', null, item.allLabel);
       all.value = '';
-      teacherSelect.appendChild(all);
+      item.node.appendChild(all);
       performanceDirectoryOptions().forEach(function (entry) {
+        // A disciplina ajuda a distinguir professores homônimos na escolha.
+        // O vínculo interno continua sendo exclusivamente o groupKey (id).
+        const suffix = entry.legacy
+          ? ' (registro antigo)'
+          : entry.active
+            ? ''
+            : ' (histórico)';
         const option = el(
           'option',
           null,
-          entry.name + (entry.active ? '' : ' (histórico)')
+          entry.name + (entry.disciplina ? ' — ' + entry.disciplina : '') + suffix
         );
         option.value = entry.groupKey;
-        teacherSelect.appendChild(option);
+        item.node.appendChild(option);
       });
-      teacherSelect.value = state.performanceFilters.teacherGroup;
-      if (teacherSelect.value !== state.performanceFilters.teacherGroup) {
-        state.performanceFilters.teacherGroup = '';
-        teacherSelect.value = '';
-      }
+      item.node.value = state.performanceFilters.teacherGroup;
+      if (item.node.value === state.performanceFilters.teacherGroup) teacherValid = true;
+    });
+    if (!teacherValid) {
+      state.performanceFilters.teacherGroup = '';
+      teacherSelects.forEach(function (item) {
+        if (item.node) item.node.value = '';
+      });
     }
 
     if (etapaSelect) {
@@ -2665,29 +2748,36 @@
     }
 
     const yearSelect = $('performanceYear');
+    const historyYearSelect = $('teacherHistoryYear');
     const serieSelect = $('performanceSerie');
     const turmaSelect = $('performanceTurma');
+    const historyTurmaSelect = $('teacherHistoryTurma');
     const yearOptions = {};
     state.observations.forEach(function (record) {
       const year = Performance.academicYear(record.identificacao && record.identificacao.data);
       if (year) yearOptions[year] = true;
     });
-    if (yearSelect) {
-      const current = state.performanceFilters.year;
-      clearNode(yearSelect);
+    const yearSelects = [yearSelect, historyYearSelect];
+    let yearValid = false;
+    yearSelects.forEach(function (select) {
+      if (!select) return;
+      clearNode(select);
       const all = el('option', null, 'Todos os anos');
       all.value = '';
-      yearSelect.appendChild(all);
+      select.appendChild(all);
       Object.keys(yearOptions).sort().reverse().forEach(function (year) {
         const option = el('option', null, year);
         option.value = year;
-        yearSelect.appendChild(option);
+        select.appendChild(option);
       });
-      yearSelect.value = current;
-      if (yearSelect.value !== current) {
-        state.performanceFilters.year = '';
-        yearSelect.value = '';
-      }
+      select.value = state.performanceFilters.year;
+      if (select.value === state.performanceFilters.year) yearValid = true;
+    });
+    if (!yearValid) {
+      state.performanceFilters.year = '';
+      yearSelects.forEach(function (select) {
+        if (select) select.value = '';
+      });
     }
 
     if (serieSelect) {
@@ -2721,21 +2811,53 @@
       }
     }
 
-    if (turmaSelect) {
-      const current = state.performanceFilters.turma;
-      clearNode(turmaSelect);
+    const classSelects = [turmaSelect, historyTurmaSelect];
+    let classValid = false;
+    classSelects.forEach(function (select) {
+      if (!select) return;
+      clearNode(select);
       const all = el('option', null, 'Todas as turmas');
       all.value = '';
-      turmaSelect.appendChild(all);
-      CONFIG.classOptions.forEach(function (name) {
+      select.appendChild(all);
+      performanceClassOptions().forEach(function (name) {
         const option = el('option', null, name);
         option.value = name;
-        turmaSelect.appendChild(option);
+        select.appendChild(option);
       });
-      turmaSelect.value = current;
-      if (turmaSelect.value !== current) {
-        state.performanceFilters.turma = '';
-        turmaSelect.value = '';
+      select.value = state.performanceFilters.turma;
+      if (select.value === state.performanceFilters.turma) classValid = true;
+    });
+    if (!classValid) {
+      state.performanceFilters.turma = '';
+      classSelects.forEach(function (select) {
+        if (select) select.value = '';
+      });
+    }
+
+    const monthSelect = $('teacherHistoryMonth');
+    if (monthSelect) {
+      clearNode(monthSelect);
+      const all = el('option', null, 'Todos os meses');
+      all.value = '';
+      monthSelect.appendChild(all);
+      PERFORMANCE_MONTH_OPTIONS.forEach(function (month) {
+        const option = el('option', null, month.label);
+        option.value = month.value;
+        monthSelect.appendChild(option);
+      });
+      monthSelect.value = state.performanceHistory.month;
+      if (monthSelect.value !== state.performanceHistory.month) {
+        state.performanceHistory.month = '';
+        monthSelect.value = '';
+      }
+    }
+
+    const orderSelect = $('teacherHistoryOrder');
+    if (orderSelect) {
+      orderSelect.value = state.performanceHistory.order;
+      if (orderSelect.value !== state.performanceHistory.order) {
+        state.performanceHistory.order = 'desc';
+        orderSelect.value = 'desc';
       }
     }
 
@@ -3236,18 +3358,110 @@
     );
   }
 
+  const HISTORY_MONTH_SHORT = [
+    'jan', 'fev', 'mar', 'abr', 'mai', 'jun',
+    'jul', 'ago', 'set', 'out', 'nov', 'dez'
+  ];
+
+  function historyDateParts(value) {
+    const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(clean(value));
+    if (!match) return null;
+    return {
+      day: match[3],
+      month: HISTORY_MONTH_SHORT[Number(match[2]) - 1] || '',
+      year: match[1]
+    };
+  }
+
+  function buildTeacherHistoryItem(record) {
+    const ident = record.identificacao || {};
+    const concluded = record.status === 'concluida';
+    const item = el('article', 'teacher-history-item' + (concluded ? '' : ' is-draft'));
+
+    const dateBox = el('div', 'teacher-history-date');
+    const dateParts = historyDateParts(ident.data);
+    if (dateParts) {
+      dateBox.appendChild(el('span', 'teacher-history-date-day', dateParts.day));
+      dateBox.appendChild(el('span', 'teacher-history-date-month', dateParts.month + ' ' + dateParts.year));
+      dateBox.setAttribute('aria-label', 'Data da observação: ' + formatDateBR(ident.data));
+    } else {
+      dateBox.appendChild(el('span', 'teacher-history-date-day', '—'));
+      dateBox.appendChild(el('span', 'teacher-history-date-month', 'Data não informada'));
+      dateBox.setAttribute('aria-label', 'Data da observação não informada');
+    }
+    item.appendChild(dateBox);
+
+    const body = el('div', 'teacher-history-body');
+    const head = el('div', 'teacher-history-item-head');
+    head.appendChild(
+      el('h4', 'teacher-history-item-title', Performance.classLabel(ident))
+    );
+    head.appendChild(statusBadge(record.status));
+    body.appendChild(head);
+
+    const meta = [clean(ident.disciplina) || 'Disciplina não informada'];
+    if (clean(ident.observador)) meta.push('Orientador(a): ' + clean(ident.observador));
+    body.appendChild(el('p', 'teacher-history-item-meta', meta.join(' · ')));
+
+    if (clean(ident.tema)) {
+      body.appendChild(el('p', 'teacher-history-item-topic', 'Tema: ' + clean(ident.tema)));
+    }
+
+    const detail = el('p', 'teacher-history-item-detail');
+    detail.appendChild(el('span', null, 'Série: ' + (clean(ident.serie) || 'Não informada')));
+    detail.appendChild(el('span', null, 'Turma: ' + (clean(ident.turma) || 'Não informada')));
+    if (concluded) {
+      detail.appendChild(el('span', null, 'Relatório completo disponível'));
+    } else {
+      detail.appendChild(el('span', null, 'Rascunho: não conta como observação concluída'));
+    }
+    body.appendChild(detail);
+    item.appendChild(body);
+
+    const actions = el('div', 'teacher-history-item-actions');
+    if (concluded) {
+      const open = makeButton(
+        'Abrir relatório',
+        'open-report',
+        { id: record.id },
+        'btn-secondary btn-sm',
+        'i-eye'
+      );
+      open.dataset.returnView = 'performance';
+      open.dataset.anchor = 'teacherHistoryTitle';
+      actions.appendChild(open);
+    } else {
+      actions.appendChild(
+        makeButton(
+          'Continuar',
+          'open-record',
+          { id: record.id },
+          'btn-secondary btn-sm',
+          'i-arrow-right'
+        )
+      );
+    }
+    item.appendChild(actions);
+
+    return item;
+  }
+
   function renderTeacherHistory(result) {
     const container = $('teacherHistory');
+    const scope = $('teacherHistoryScope');
     if (!container) return;
     clearNode(container);
 
     const groupKey = state.performanceFilters.teacherGroup;
     if (!groupKey) {
+      if (scope) {
+        scope.textContent = 'Escolha um professor para consultar o histórico individual.';
+      }
       container.appendChild(
         el(
           'p',
           'chart-empty',
-          'Selecione um professor(a) no filtro ou na tabela para ver o histórico individual.'
+          'Selecione um professor(a) no filtro acima ou na tabela para ver o histórico individual.'
         )
       );
       return;
@@ -3256,6 +3470,7 @@
     const entry = result.directory.list.find(function (item) {
       return item.groupKey === groupKey;
     });
+    const month = state.performanceHistory.month;
     const history = Performance.teacherHistory(
       state.observations,
       result.directory,
@@ -3265,10 +3480,40 @@
         serie: state.performanceFilters.serie,
         turma: state.performanceFilters.turma,
         year: state.performanceFilters.year,
+        month: month,
         from: state.performanceFilters.from,
-        to: state.performanceFilters.to
+        to: state.performanceFilters.to,
+        order: state.performanceHistory.order
       }
     );
+
+    if (scope) {
+      const applied = [];
+      if (state.performanceFilters.year) applied.push('Ano ' + state.performanceFilters.year);
+      if (month) {
+        const monthOption = PERFORMANCE_MONTH_OPTIONS.find(function (item) {
+          return item.value === month;
+        });
+        applied.push('Mês ' + (monthOption ? monthOption.label : month));
+      }
+      if (state.performanceFilters.turma) applied.push('Turma ' + state.performanceFilters.turma);
+      if (state.performanceFilters.etapa) {
+        applied.push('Etapa ' + Performance.stageLabel(state.performanceFilters.etapa));
+      }
+      if (state.performanceFilters.serie) applied.push('Série ' + state.performanceFilters.serie);
+      if (state.performanceFilters.from) applied.push('A partir de ' + formatDateBR(state.performanceFilters.from));
+      if (state.performanceFilters.to) applied.push('Até ' + formatDateBR(state.performanceFilters.to));
+      scope.textContent = applied.length
+        ? 'Filtros aplicados: ' + applied.join(' · ')
+        : 'Sem filtro de ano, mês ou turma.';
+    }
+
+    const concluded = history.records.filter(function (record) {
+      return record.status === 'concluida';
+    });
+    const drafts = history.records.filter(function (record) {
+      return record.status !== 'concluida';
+    });
 
     const summary = el('div', 'teacher-history-summary');
     summary.appendChild(
@@ -3277,30 +3522,109 @@
         null,
         (entry ? entry.name : 'Professor(a)') +
           ' · ' +
-          history.total +
+          concluded.length +
           ' ' +
-          plural(history.total, 'registro', 'registros') +
-          ' (' +
-          history.concluded +
-          ' concluído(s), ' +
-          history.drafts +
-          ' em andamento)'
+          plural(concluded.length, 'observação concluída', 'observações concluídas') +
+          (drafts.length
+            ? ' · ' + drafts.length + ' ' + plural(drafts.length, 'em andamento', 'em andamento')
+            : '')
       )
     );
+    if (entry && entry.legacy) {
+      summary.appendChild(
+        el(
+          'p',
+          'teacher-history-summary-note',
+          'Registro antigo sem professorId; o vínculo é feito pelo nome normalizado.'
+        )
+      );
+    } else if (entry && entry.active === false) {
+      summary.appendChild(
+        el('p', 'teacher-history-summary-note', 'Professor(a) fora do cadastro ativo; o histórico foi preservado.')
+      );
+    }
     container.appendChild(summary);
 
     if (!history.records.length) {
+      const filtered =
+        !!state.performanceFilters.year ||
+        !!month ||
+        !!state.performanceFilters.turma ||
+        !!state.performanceFilters.etapa ||
+        !!state.performanceFilters.serie ||
+        !!state.performanceFilters.from ||
+        !!state.performanceFilters.to;
       container.appendChild(
-        el('p', 'chart-empty', 'Nenhuma observação encontrada para este professor no recorte.')
+        buildEmptyState({
+          icon: filtered ? 'i-search' : 'i-history',
+          title: filtered ? 'Nenhuma observação neste recorte' : 'Nenhuma observação registrada',
+          text: filtered
+            ? 'Não há observações concluídas ou em andamento para ' +
+              (entry ? entry.name : 'este professor') +
+              ' com os filtros selecionados. Ajuste o ano, o mês ou a turma.'
+            : 'Ainda não há observações registradas para ' +
+              (entry ? entry.name : 'este professor') +
+              '. Nenhum dado foi inventado.',
+          actions: filtered
+            ? [{ label: 'Limpar filtros', action: 'clear-performance-filters', icon: 'i-refresh' }]
+            : []
+        })
       );
       return;
     }
 
-    const list = el('div', 'records-list');
-    history.records.forEach(function (record) {
-      list.appendChild(buildRecordCard(record, 'reports'));
-    });
-    container.appendChild(list);
+    if (concluded.length) {
+      container.appendChild(el('h4', 'teacher-history-group-title', 'Observações concluídas'));
+      const list = el('div', 'teacher-history-list');
+      concluded.forEach(function (record) {
+        list.appendChild(buildTeacherHistoryItem(record));
+      });
+      container.appendChild(list);
+    } else {
+      container.appendChild(
+        el(
+          'p',
+          'chart-empty',
+          'Nenhuma observação concluída neste recorte. Os registros em andamento aparecem abaixo.'
+        )
+      );
+    }
+
+    if (drafts.length) {
+      const draftHeader = el('div', 'teacher-history-group-head');
+      draftHeader.appendChild(el('h4', 'teacher-history-group-title', 'Em andamento'));
+      draftHeader.appendChild(el('span', 'badge badge--warning', 'Não conta como concluída'));
+      container.appendChild(draftHeader);
+      const draftList = el('div', 'teacher-history-list');
+      drafts.forEach(function (record) {
+        draftList.appendChild(buildTeacherHistoryItem(record));
+      });
+      container.appendChild(draftList);
+    }
+
+    container.appendChild(
+      el(
+        'p',
+        'chart-footnote',
+        'Lista ordenada por data da observação. Registros sem data aparecem ao final. ' +
+          'A consulta ao relatório é somente leitura e não altera os dados originais.'
+      )
+    );
+  }
+
+  function focusTeacherHistory(anchorId) {
+    const node = $(anchorId) || $('teacherHistoryTitle');
+    if (!node) return;
+    if (typeof node.focus === 'function') {
+      try {
+        node.focus({ preventScroll: true });
+      } catch (error) {
+        node.focus();
+      }
+    }
+    if (typeof node.scrollIntoView === 'function') {
+      node.scrollIntoView({ block: 'start' });
+    }
   }
 
   function renderPerformance() {
@@ -3342,6 +3666,475 @@
     renderTeacherHistory(result);
   }
 
+  function annualPercent(part, whole) {
+    if (!whole) return '—';
+    return Math.round((part / whole) * 100) + '%';
+  }
+
+  function annualMetaItem(label, value) {
+    const item = el('div', 'teacher-report-meta-item');
+    item.appendChild(el('span', 'teacher-report-meta-label', label));
+    item.appendChild(el('span', 'teacher-report-meta-value', value || 'Não informado'));
+    return item;
+  }
+
+  function annualSection(title) {
+    const section = el('section', 'annual-section');
+    section.appendChild(el('h2', 'annual-section-title', title));
+    return section;
+  }
+
+  function annualTable(headers, rows, numericColumns) {
+    const wrap = el('div', 'annual-table-wrap');
+    const table = el('table', 'annual-table');
+    const thead = el('thead');
+    const headRow = el('tr');
+    headers.forEach(function (header) {
+      headRow.appendChild(el('th', null, header));
+    });
+    thead.appendChild(headRow);
+    table.appendChild(thead);
+
+    const tbody = el('tbody');
+    rows.forEach(function (cells) {
+      const row = el('tr');
+      cells.forEach(function (cell, index) {
+        const numeric = numericColumns && numericColumns.indexOf(index) !== -1;
+        row.appendChild(el('td', numeric ? 'annual-table-num' : null, cell));
+      });
+      tbody.appendChild(row);
+    });
+    table.appendChild(tbody);
+    wrap.appendChild(table);
+    return wrap;
+  }
+
+  function annualNormalizeAnswer(value) {
+    const raw = clean(value);
+    if (!raw) return '';
+    const key = searchKey(raw);
+    const aliases = {
+      sim: 'sim',
+      parcial: 'parcial',
+      parcialmente: 'parcial',
+      nao: 'nao',
+      'nao observado': 'na',
+      'nao se aplica': 'na',
+      'nao foi possivel observar': 'na'
+    };
+    return aliases[key] || raw;
+  }
+
+  function annualEmptyCounts() {
+    return { sim: 0, parcial: 0, nao: 0, na: 0, missing: 0 };
+  }
+
+  function addAnnualCount(counts, value) {
+    const normalized = annualNormalizeAnswer(value);
+    if (!normalized) {
+      counts.missing += 1;
+      return;
+    }
+    const valid = (CONFIG.answerOptions || []).some(function (option) {
+      return option.value === normalized;
+    });
+    if (valid) counts[normalized] += 1;
+    else counts.missing += 1;
+  }
+
+  function annualApplicable(counts) {
+    return counts.sim + counts.parcial + counts.nao;
+  }
+
+  function annualMonthlyBuckets(result) {
+    const map = new Map();
+    function ensure(key) {
+      if (!map.has(key)) {
+        map.set(key, {
+          pontualidade: annualEmptyCounts(),
+          chamada: annualEmptyCounts()
+        });
+      }
+      return map.get(key);
+    }
+    (result.records || []).forEach(function (record) {
+      const date = clean(record.identificacao && record.identificacao.data);
+      const match = /^(\d{4})-(\d{2})/.exec(date);
+      if (!match) return;
+      const bucket = ensure(match[1] + '-' + match[2]);
+      addAnnualCount(
+        bucket.pontualidade,
+        Performance.openingValue(record, 'abertura_pontualidade')
+      );
+      addAnnualCount(
+        bucket.chamada,
+        Performance.openingValue(record, 'abertura_chamada')
+      );
+    });
+    return map;
+  }
+
+  function annualColumnChart(months) {
+    const chart = el('div', 'column-chart annual-column-chart');
+    chart.setAttribute('role', 'img');
+    chart.setAttribute(
+      'aria-label',
+      'Observações concluídas por mês: ' +
+        months
+          .map(function (month) {
+            return month.label + ' ' + month.count;
+          })
+          .join(', ')
+    );
+
+    const max = months.reduce(function (top, month) {
+      return Math.max(top, month.count);
+    }, 0);
+
+    months.forEach(function (month) {
+      const column = el('div', 'column');
+      column.appendChild(el('span', 'column-value', String(month.count)));
+      const barWrap = el('div', 'column-bar-wrap');
+      const bar = el('div', 'column-bar');
+      bar.style.height = max ? Math.max(2, Math.round((month.count / max) * 100)) + '%' : '2%';
+      barWrap.appendChild(bar);
+      column.appendChild(barWrap);
+      column.appendChild(el('span', 'column-label', month.label));
+      chart.appendChild(column);
+    });
+
+    return chart;
+  }
+
+  function annualOpeningCard(question, item) {
+    const card = el('div', 'annual-chart-card');
+    card.appendChild(el('h3', 'annual-chart-title', question.text));
+
+    if (!item) {
+      card.appendChild(el('p', 'annual-empty', 'Indicador não disponível para este recorte.'));
+      return card;
+    }
+
+    const counts = item.counts || annualEmptyCounts();
+    const applicable = annualApplicable(counts);
+    const options = CONFIG.openingOptions || CONFIG.answerOptions || [];
+    const rows = options.map(function (option) {
+      const count = counts[option.value] || 0;
+      return {
+        label: option.label,
+        count: count,
+        tone: option.tone,
+        valueText: String(count)
+      };
+    });
+
+    card.appendChild(buildHorizontalBars(rows, question.text));
+    card.appendChild(
+      el(
+        'p',
+        'annual-note',
+        'Sim: ' +
+          counts.sim +
+          ' de ' +
+          applicable +
+          ' respostas observáveis (' +
+          annualPercent(counts.sim, applicable) +
+          '). Denominador: ' +
+          applicable +
+          ' (Sim + Parcialmente + Não). ' +
+          (counts.na || 0) +
+          ' "não foi possível observar" e ' +
+          (counts.missing || 0) +
+          ' sem resposta não entram como negativas.'
+      )
+    );
+    return card;
+  }
+
+  function buildAnnualPerformanceDocument(result, teacherEntry, year) {
+    const documentElement = el(
+      'article',
+      'report-document teacher-report performance-annual-report'
+    );
+    const schoolName = clean(state.settings && state.settings.schoolName);
+    const schoolUnit = clean(state.settings && state.settings.schoolUnit);
+    const schoolLine = [schoolName, schoolUnit].filter(Boolean).join(' · ');
+    const teacherName = teacherEntry ? teacherEntry.name : 'Professor(a)';
+    const totals = result.totals || {
+      sim: 0,
+      parcial: 0,
+      nao: 0,
+      na: 0,
+      unanswered: 0,
+      answered: 0,
+      applicable: 0
+    };
+    const classes = result.classesObserved || [];
+
+    const header = el('header', 'report-header teacher-report-header');
+    const brand = el('div', 'teacher-report-brand');
+    brand.appendChild(el('p', 'teacher-report-app', clean(CONFIG.appName) || 'ObservaEdu'));
+    if (schoolLine) {
+      brand.appendChild(el('p', 'teacher-report-school', schoolLine));
+    }
+    header.appendChild(brand);
+    header.appendChild(el('h1', 'teacher-report-title', 'Desempenho anual do professor'));
+    header.appendChild(
+      el(
+        'p',
+        'teacher-report-subtitle',
+        'Relatório individual de acompanhamento · Ano letivo ' + year
+      )
+    );
+    documentElement.appendChild(header);
+
+    const meta = el('div', 'teacher-report-meta');
+    meta.appendChild(annualMetaItem('Professor', teacherName));
+    if (teacherEntry && clean(teacherEntry.disciplina)) {
+      meta.appendChild(annualMetaItem('Disciplina', clean(teacherEntry.disciplina)));
+    }
+    if (schoolLine) {
+      meta.appendChild(annualMetaItem('Escola', schoolLine));
+    }
+    meta.appendChild(annualMetaItem('Ano analisado', year));
+    meta.appendChild(annualMetaItem('Data de geração', formatDateTimeBR(nowIso())));
+    documentElement.appendChild(meta);
+
+    const summary = annualSection('Resumo anual');
+    const stats = el('div', 'performance-stats annual-stats');
+    stats.appendChild(
+      buildPerformanceStat(
+        'Observações concluídas',
+        String(result.sampleSize || 0),
+        result.sampleSize
+          ? 'Somente registros concluídos neste professor e ano'
+          : 'Nenhuma observação concluída neste professor e ano',
+        'blue'
+      )
+    );
+    stats.appendChild(
+      buildPerformanceStat(
+        'Turmas observadas',
+        String(classes.length),
+        classes.length ? classes.join(' · ') : 'Nenhuma turma neste recorte',
+        'amber'
+      )
+    );
+    stats.appendChild(
+      buildPerformanceStat(
+        'Respostas observáveis',
+        String(totals.applicable || 0),
+        'Denominador: Sim + Parcialmente + Não',
+        'green'
+      )
+    );
+    stats.appendChild(
+      buildPerformanceStat(
+        'Não observado / N/A',
+        String(totals.na || 0),
+        'Não contabilizado como negativo',
+        'gray'
+      )
+    );
+    summary.appendChild(stats);
+
+    const distributionCard = el('div', 'annual-chart-card');
+    distributionCard.appendChild(
+      el('h3', 'annual-chart-title', 'Distribuição das respostas')
+    );
+    const distributionItems = [
+      {
+        label: 'Sim',
+        count: totals.sim || 0,
+        tone: 'positive',
+        valueText:
+          (totals.sim || 0) + ' (' + annualPercent(totals.sim || 0, totals.applicable) + ')'
+      },
+      {
+        label: 'Parcialmente',
+        count: totals.parcial || 0,
+        tone: 'warning',
+        valueText:
+          (totals.parcial || 0) +
+          ' (' +
+          annualPercent(totals.parcial || 0, totals.applicable) +
+          ')'
+      },
+      {
+        label: 'Não',
+        count: totals.nao || 0,
+        tone: 'danger',
+        valueText:
+          (totals.nao || 0) + ' (' + annualPercent(totals.nao || 0, totals.applicable) + ')'
+      },
+      {
+        label: 'Não observado / N/A',
+        count: totals.na || 0,
+        tone: 'neutral',
+        valueText: (totals.na || 0) + ' (não negativo)'
+      },
+      {
+        label: 'Sem resposta',
+        count: totals.unanswered || 0,
+        tone: 'neutral',
+        valueText: String(totals.unanswered || 0)
+      }
+    ];
+    distributionCard.appendChild(
+      buildHorizontalBars(
+        distributionItems,
+        'Distribuição das respostas observáveis: Sim ' +
+          (totals.sim || 0) +
+          ', Parcialmente ' +
+          (totals.parcial || 0) +
+          ', Não ' +
+          (totals.nao || 0)
+      )
+    );
+    distributionCard.appendChild(
+      el(
+        'p',
+        'annual-note',
+        'Percentuais de Sim, Parcialmente e Não calculados sobre ' +
+          (totals.applicable || 0) +
+          ' respostas observáveis. ' +
+          (totals.na || 0) +
+          ' respostas "Não foi possível observar" e ' +
+          (totals.unanswered || 0) +
+          ' sem resposta não entram nesse denominador e não são tratadas como negativas.'
+      )
+    );
+    summary.appendChild(distributionCard);
+    documentElement.appendChild(summary);
+
+    const openingSection = annualSection('Pontualidade e realização da chamada');
+    const openingGrid = el('div', 'annual-chart-grid');
+    (CONFIG.openingQuestions || []).forEach(function (question) {
+      openingGrid.appendChild(
+        annualOpeningCard(question, result.openingById && result.openingById[question.id])
+      );
+    });
+    openingSection.appendChild(openingGrid);
+    documentElement.appendChild(openingSection);
+
+    const monthlySection = annualSection('Acompanhamento mensal');
+    const months = result.monthly || [];
+    if (!months.length) {
+      monthlySection.appendChild(
+        el(
+          'p',
+          'annual-empty',
+          'Nenhuma observação concluída neste professor e ano para distribuir por mês.'
+        )
+      );
+    } else {
+      monthlySection.appendChild(annualColumnChart(months));
+      const buckets = annualMonthlyBuckets(result);
+      const monthlyRows = months.map(function (month) {
+        const bucket = buckets.get(month.key) || {
+          pontualidade: annualEmptyCounts(),
+          chamada: annualEmptyCounts()
+        };
+        const punctApplicable = annualApplicable(bucket.pontualidade);
+        const attendApplicable = annualApplicable(bucket.chamada);
+        return [
+          month.label,
+          String(month.count),
+          punctApplicable
+            ? 'Sim ' +
+              bucket.pontualidade.sim +
+              '/' +
+              punctApplicable +
+              ' (' +
+              annualPercent(bucket.pontualidade.sim, punctApplicable) +
+              ')'
+            : '—',
+          attendApplicable
+            ? 'Sim ' +
+              bucket.chamada.sim +
+              '/' +
+              attendApplicable +
+              ' (' +
+              annualPercent(bucket.chamada.sim, attendApplicable) +
+              ')'
+            : '—'
+        ];
+      });
+      monthlySection.appendChild(
+        annualTable(
+          [
+            'Mês',
+            'Observações',
+            'Pontualidade (Sim / observáveis)',
+            'Chamada (Sim / observáveis)'
+          ],
+          monthlyRows,
+          [1]
+        )
+      );
+      monthlySection.appendChild(
+        el(
+          'p',
+          'annual-note',
+          'Os indicadores mensais usam como denominador as respostas observáveis ' +
+            '(Sim + Parcialmente + Não). Meses com menos de 3 observações são amostra pequena ' +
+            'e não devem ser lidos como tendência. "Não foi possível observar" fica fora do denominador.'
+        )
+      );
+    }
+    documentElement.appendChild(monthlySection);
+
+    const historySection = annualSection('Histórico de observações');
+    const records = (result.records || []).slice().sort(function (a, b) {
+      return String((a.identificacao && a.identificacao.data) || '').localeCompare(
+        String((b.identificacao && b.identificacao.data) || '')
+      );
+    });
+    if (!records.length) {
+      historySection.appendChild(
+        el(
+          'p',
+          'annual-empty',
+          'Nenhuma observação concluída registrada para este professor neste ano.'
+        )
+      );
+    } else {
+      const historyRows = records.map(function (record) {
+        const ident = record.identificacao || {};
+        return [
+          formatDateBR(ident.data),
+          clean(ident.serie) || '—',
+          clean(ident.turma) || '—',
+          clean(ident.disciplina) || '—'
+        ];
+      });
+      historySection.appendChild(
+        annualTable(['Data', 'Série', 'Turma', 'Disciplina'], historyRows, [])
+      );
+      historySection.appendChild(
+        el(
+          'p',
+          'annual-note',
+          'Somente observações concluídas. Registros em andamento não entram nos indicadores anuais.'
+        )
+      );
+    }
+    documentElement.appendChild(historySection);
+
+    const footer = el('footer', 'teacher-report-footer');
+    footer.appendChild(
+      el(
+        'p',
+        null,
+        'Documento gerado a partir dos dados registrados no sistema. ' +
+          'Sem nota, ranking ou diagnóstico automático. O histórico completo permanece interno, com a equipe pedagógica.'
+      )
+    );
+    documentElement.appendChild(footer);
+
+    return documentElement;
+  }
+
   async function handlePrintPerformanceAnnual() {
     const teacherGroup = state.performanceFilters.teacherGroup;
     if (!teacherGroup) {
@@ -3354,153 +4147,32 @@
       return;
     }
 
-    const win = window.open('', '_blank');
-    if (!win) {
-      showToast('O navegador bloqueou a janela de impressão. Permita pop-ups para este site.', 'error');
-      return;
-    }
-
     try {
-      const result = Performance.compute(state.observations, state.settings, state.performanceFilters);
-    const directory = result.directory || {};
-    const teacherEntry = (directory.list || []).find(function (entry) {
-      return entry.groupKey === teacherGroup;
-    });
-    const teacherName = teacherEntry ? teacherEntry.name : 'Professor';
-    function escapeHtml(value) {
-      return String(value || '')
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;');
-    }
+      // O relatório anual é sempre exclusivo do professor e do ano escolhidos.
+      // Os demais filtros da tela não restringem este documento.
+      const result = Performance.compute(state.observations, state.settings, {
+        teacherGroup: teacherGroup,
+        year: year
+      });
+      const directory = result.directory || {};
+      const teacherEntry = (directory.list || []).find(function (entry) {
+        return entry.groupKey === teacherGroup;
+      });
+      const teacherName = teacherEntry ? teacherEntry.name : 'Professor(a)';
+      const documentElement = buildAnnualPerformanceDocument(result, teacherEntry, year);
+      const title = 'Desempenho anual - ' + teacherName + ' - ' + year;
 
-    const schoolName = clean(state.settings && state.settings.schoolName);
-    const generatedAt = formatDateTimeBR(nowIso());
-    const records = (result.records || []).slice().sort(function (a, b) {
-      return String((a.identificacao && a.identificacao.data) || '').localeCompare(
-        String((b.identificacao && b.identificacao.data) || '')
-      );
-    });
-
-    const totals = result.totals || { sim: 0, parcial: 0, nao: 0, na: 0, answered: 0, applicable: 0 };
-    const classes = result.classesObserved || [];
-    const punct = result.openingById && result.openingById.abertura_pontualidade;
-    const attend = result.openingById && result.openingById.abertura_chamada;
-
-    function pct(part, whole) {
-      if (!whole) return '—';
-      return Math.round((part / whole) * 100) + '%';
-    }
-
-    const monthlyRows = (result.monthly || [])
-      .slice()
-      .sort(function (a, b) {
-        return (a.year - b.year) || (a.month - b.month);
-      })
-      .map(function (m) {
-        const pPct = m.pontualidadeAnswered ? pct(m.pontualidadeSim, m.pontualidadeAnswered) : '—';
-        const cPct = m.chamadaAnswered ? pct(m.chamadaSim, m.chamadaAnswered) : '—';
-        return (
-          '<tr>' +
-          '<td>' + m.label + '/' + m.year + '</td>' +
-          '<td style="text-align:center">' + m.count + '</td>' +
-          '<td style="text-align:center">' + pPct + '</td>' +
-          '<td style="text-align:center">' + cPct + '</td>' +
-          '</tr>'
+      if (!openPrintPreview('performance', documentElement, title)) {
+        showToast(
+          'A pré-visualização de impressão não está disponível. Abra a impressão pelo menu do navegador.',
+          'error'
         );
-      })
-      .join('');
-
-    const historyRows = records
-      .map(function (record) {
-        const ident = record.identificacao || {};
-        return (
-          '<tr>' +
-          '<td>' + formatDateBR(ident.data) + '</td>' +
-          '<td>' + escapeHtml(clean(ident.serie) || '—') + '</td>' +
-          '<td>' + escapeHtml(clean(ident.turma) || '—') + '</td>' +
-          '<td>' + escapeHtml(clean(ident.disciplina) || '—') + '</td>' +
-          '<td>' + (record.status === 'concluida' ? 'Concluída' : 'Em andamento') + '</td>' +
-          '</tr>'
-        );
-      })
-      .join('');
-
-    const html =
-      '<!doctype html><html lang="pt-BR"><head><meta charset="utf-8">' +
-      '<title>Desempenho anual - ' + escapeHtml(teacherName) + '</title>' +
-      '<style>' +
-      'body{font-family:Arial,Helvetica,sans-serif;color:#1e293b;margin:0;padding:24px;font-size:12px;}' +
-      '@page{size:A4;margin:14mm 13mm;}' +
-      'h1{font-size:18px;color:#1e3a8a;margin:0 0 4px;}' +
-      'h2{font-size:14px;color:#1e3a8a;margin:16px 0 6px;border-bottom:1px solid #dbeafe;padding-bottom:4px;}' +
-      '.brand{font-size:11px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:#1d4ed8;margin-bottom:2px;}' +
-      '.school{font-size:11.5px;color:#64748b;margin-bottom:12px;}' +
-      '.meta{display:grid;grid-template-columns:repeat(4,1fr);gap:8px 16px;margin-bottom:16px;padding:10px 0;border-bottom:1px solid #e2e8f0;}' +
-      '.meta-item{display:flex;flex-direction:column;gap:2px;}' +
-      '.meta-label{font-size:9px;font-weight:700;text-transform:uppercase;color:#94a3b8;}' +
-      '.meta-value{font-size:12px;color:#0f172a;}' +
-      '.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:16px;}' +
-      '.stat{border:1px solid #e2e8f0;border-radius:8px;padding:8px 10px;}' +
-      '.stat-label{font-size:10px;color:#64748b;margin:0 0 2px;}' +
-      '.stat-value{font-size:16px;font-weight:700;color:#1e3a8a;margin:0;}' +
-      '.stat-detail{font-size:9.5px;color:#94a3b8;margin:2px 0 0;}' +
-      'table{width:100%;border-collapse:collapse;margin:8px 0 16px;font-size:11px;}' +
-      'th,td{border:1px solid #cbd5e1;padding:5px 7px;}' +
-      'th{background:#eff6ff;color:#1e3a8a;font-weight:700;text-align:center;}' +
-      'th:first-child{text-align:left;}' +
-      'tr{break-inside:avoid;page-break-inside:avoid;}' +
-      'thead{display:table-header-group;}' +
-      '.empty{font-style:italic;color:#94a3b8;font-size:11px;}' +
-      '.footer{margin-top:20px;padding-top:8px;border-top:1px solid #e2e8f0;font-size:9.5px;color:#94a3b8;}' +
-      '</style></head><body>' +
-      '<div class="brand">ObservaEdu</div>' +
-      (schoolName ? '<div class="school">' + escapeHtml(schoolName) + '</div>' : '') +
-      '<h1>Desempenho anual do professor</h1>' +
-      '<div class="meta">' +
-      '<div class="meta-item"><span class="meta-label">Professor</span><span class="meta-value">' + escapeHtml(teacherName) + '</span></div>' +
-      '<div class="meta-item"><span class="meta-label">Ano analisado</span><span class="meta-value">' + year + '</span></div>' +
-      '<div class="meta-item"><span class="meta-label">Data de geração</span><span class="meta-value">' + generatedAt + '</span></div>' +
-      '<div class="meta-item"><span class="meta-label">Observações</span><span class="meta-value">' + result.sampleSize + '</span></div>' +
-      '</div>' +
-      '<h2>Resumo anual</h2>' +
-      '<div class="stats">' +
-      '<div class="stat"><p class="stat-label">Observações concluídas</p><p class="stat-value">' + result.sampleSize + '</p><p class="stat-detail">' + (result.sampleSize === result.allConcludedCount ? 'Todas as concluídas' : 'de ' + result.allConcludedCount + ' concluídas no total') + '</p></div>' +
-      '<div class="stat"><p class="stat-label">Turmas observadas</p><p class="stat-value">' + classes.length + '</p><p class="stat-detail">' + (classes.length ? classes.slice(0, 4).join(' · ') : 'Nenhuma neste recorte') + '</p></div>' +
-      '<div class="stat"><p class="stat-label">Respostas: Sim</p><p class="stat-value">' + totals.sim + '</p><p class="stat-detail">' + pct(totals.sim, totals.applicable) + ' das aplicáveis</p></div>' +
-      '<div class="stat"><p class="stat-label">Respostas: Parcialmente</p><p class="stat-value">' + totals.parcial + '</p><p class="stat-detail">' + pct(totals.parcial, totals.applicable) + '</p></div>' +
-      '</div>' +
-      '<div class="stats">' +
-      '<div class="stat"><p class="stat-label">Respostas: Não</p><p class="stat-value">' + totals.nao + '</p><p class="stat-detail">' + pct(totals.nao, totals.applicable) + '</p></div>' +
-      '<div class="stat"><p class="stat-label">Não observado / N/A</p><p class="stat-value">' + totals.na + '</p><p class="stat-detail">Não contabilizado como negativo</p></div>' +
-      '<div class="stat"><p class="stat-label">Pontualidade (Sim)</p><p class="stat-value">' + (punct ? pct(punct.sim, punct.answered) : '—') + '</p><p class="stat-detail">' + (punct ? punct.answered + ' respostas' : 'Sem dados') + '</p></div>' +
-      '<div class="stat"><p class="stat-label">Chamada (Sim)</p><p class="stat-value">' + (attend ? pct(attend.sim, attend.answered) : '—') + '</p><p class="stat-detail">' + (attend ? attend.answered + ' respostas' : 'Sem dados') + '</p></div>' +
-      '</div>' +
-      '<h2>Acompanhamento mensal</h2>' +
-      (monthlyRows
-        ? '<table><thead><tr><th>Mês</th><th>Observações</th><th>Pontualidade (Sim)</th><th>Chamada (Sim)</th></tr></thead><tbody>' + monthlyRows + '</tbody></table>'
-        : '<p class="empty">Nenhuma observação concluída neste período.</p>') +
-      '<h2>Histórico de observações</h2>' +
-      (historyRows
-        ? '<table><thead><tr><th>Data</th><th>Série</th><th>Turma</th><th>Disciplina</th><th>Situação</th></tr></thead><tbody>' + historyRows + '</tbody></table>'
-        : '<p class="empty">Nenhuma observação registrada para este professor neste ano.</p>') +
-      '<div class="footer">ObservaEdu · Relatório de desempenho anual. Documento gerado a partir de dados registrados no sistema. Sem ranking, nota ou diagnóstico automático.</div>' +
-      '</body></html>';
-
-    win.document.open();
-    win.document.write(html);
-    win.document.close();
-    win.focus();
-    setTimeout(function () {
-      win.print();
-    }, 300);
-  } catch (error) {
-    try { win.close(); } catch (e) {}
-    showToast('Não foi possível gerar o relatório. Tente novamente.', 'error');
-    console.error('ObservaEdu: erro ao gerar desempenho anual.', error);
+      }
+    } catch (error) {
+      showToast('Não foi possível gerar o relatório. Tente novamente.', 'error');
+      console.error('ObservaEdu: erro ao gerar desempenho anual.', error);
+    }
   }
-}
 
   function resetPerformanceFilters() {
     state.performanceFilters = {
@@ -3511,6 +4183,10 @@
       turma: '',
       from: '',
       to: ''
+    };
+    state.performanceHistory = {
+      month: '',
+      order: 'desc'
     };
     syncPerformanceControls();
     renderPerformance();
@@ -5662,18 +6338,48 @@
     return null;
   }
 
-  function openReportForRecord(record) {
+  function updateReportModeChrome() {
+    const readOnly = state.reportReturnView === 'performance';
+    const backLabel = $('reportBackLabel');
+    if (backLabel) {
+      backLabel.textContent = readOnly ? 'Voltar ao histórico' : 'Voltar aos relatórios';
+    }
+    const badge = $('reportReadOnlyBadge');
+    if (badge) badge.hidden = !readOnly;
+    const backToForm = $('reportBackToFormButton');
+    if (backToForm) backToForm.hidden = readOnly;
+    const editButton = $('reportEditButton');
+    if (editButton) editButton.hidden = readOnly;
+  }
+
+  function openReportForRecord(record, options) {
     if (!record) return false;
+    const opts = options || {};
     state.currentReportId = record.id;
     state.reportSnapshot = clone(record);
+    state.reportReturnView = opts.returnView === 'performance' ? 'performance' : 'reports';
+    state.reportReturnAnchor = clean(opts.anchor) || '';
     setView('report');
     return true;
+  }
+
+  function backFromReport() {
+    const fromHistory = state.reportReturnView === 'performance';
+    const anchor = state.reportReturnAnchor;
+    state.reportReturnView = 'reports';
+    state.reportReturnAnchor = '';
+    setView(fromHistory ? 'performance' : 'reports');
+    if (fromHistory) {
+      focusTeacherHistory(anchor);
+    }
   }
 
   function renderCurrentReport() {
     const container = $('reportDocumentContainer');
     const notice = $('reportPageNotice');
     if (!container) return false;
+
+    updateReportModeChrome();
 
     const record = getCurrentReportRecord();
     if (!record) {
@@ -5813,6 +6519,10 @@
   }
 
   function handleBackToForm() {
+    if (state.reportReturnView === 'performance') {
+      showToast('A consulta ao histórico é somente leitura. Volte ao histórico para escolher outro registro.', 'info');
+      return;
+    }
     const record = getCurrentReportRecord();
     if (!record) {
       showToast('Não há um formulário associado a este relatório.', 'error');
@@ -5823,6 +6533,10 @@
   }
 
   function handleEditReport() {
+    if (state.reportReturnView === 'performance') {
+      showToast('A consulta ao histórico é somente leitura. Volte ao histórico para escolher outro registro.', 'info');
+      return;
+    }
     const record = getCurrentReportRecord();
     if (!record) {
       showToast('Não há um formulário associado a este relatório.', 'error');
@@ -5830,6 +6544,49 @@
       return;
     }
     activateForm(record, { step: 6, returnView: 'reports' });
+  }
+
+  function printPreviewLabel(kind) {
+    return kind === 'performance'
+      ? 'Pré-visualização — Desempenho anual'
+      : 'Pré-visualização de impressão';
+  }
+
+  // Coloca o documento no diálogo de pré-visualização já existente. O mesmo
+  // caminho é usado no computador e no celular: não depende de pop-up, então
+  // não é bloqueado por navegadores móveis.
+  function openPrintPreview(kind, documentElement, title) {
+    const container = $('printPreviewPages');
+    const dialog = $('printPreviewDialog');
+    if (!container || !dialog || !documentElement) return false;
+
+    const normalizedKind = kind === 'performance' ? 'performance' : 'report';
+    clearNode(container);
+    container.appendChild(documentElement.cloneNode(true));
+
+    state.printPreviewKind = normalizedKind;
+    state.printPreviewTitle = clean(title) || 'Relatório';
+
+    const titleNode = $('printPreviewTitle');
+    if (titleNode) titleNode.textContent = printPreviewLabel(normalizedKind);
+
+    const printLabel = $('printPreviewPrintLabel');
+    if (printLabel) {
+      printLabel.textContent =
+        normalizedKind === 'performance'
+          ? 'Imprimir / Salvar PDF do desempenho'
+          : 'Imprimir / Salvar em PDF';
+    }
+
+    document.body.classList.add('print-preview-open');
+    if (!dialog.open) {
+      if (typeof dialog.showModal === 'function') {
+        dialog.showModal();
+      } else {
+        dialog.setAttribute('open', '');
+      }
+    }
+    return true;
   }
 
   function printDocument(title) {
@@ -5875,32 +6632,20 @@
       return;
     }
 
-    const container = $('printPreviewPages');
-    const dialog = $('printPreviewDialog');
-    if (!container || !dialog) {
-      // Fallback: impressão nativa.
-      const identification = record.identificacao || {};
-      const title =
-        'Relatório - ' +
-        (clean(identification.professor) || 'observação pedagógica') +
-        ' - ' +
-        (clean(identification.data) ? formatDateBR(identification.data) : 'sem data');
-      printDocument(title);
-      return;
-    }
+    const identification = record.identificacao || {};
+    const title =
+      'Relatório - ' +
+      (clean(identification.professor) || 'observação pedagógica') +
+      ' - ' +
+      (clean(identification.data) ? formatDateBR(identification.data) : 'sem data');
 
     const source = $('reportDocumentContainer');
-    clearNode(container);
-    if (source && source.firstElementChild) {
-      container.appendChild(source.firstElementChild.cloneNode(true));
-    }
+    const documentElement = source && source.firstElementChild;
 
-    if (typeof dialog.showModal === 'function') {
-      dialog.showModal();
-    } else {
-      dialog.setAttribute('open', '');
+    // Fallback: se o diálogo não existir, imprime a página nativa.
+    if (!openPrintPreview('report', documentElement, title)) {
+      printDocument(title);
     }
-    document.body.classList.add('print-preview-open');
   }
 
   function handlePrintRecord(id) {
@@ -5949,13 +6694,13 @@
     });
   }
 
-  function openReportById(id) {
+  function openReportById(id, options) {
     const record = getRecord(id);
     if (!record) {
       showToast('O registro solicitado não foi encontrado.', 'error');
       return;
     }
-    openReportForRecord(record);
+    openReportForRecord(record, options);
   }
 
   async function deleteRecordById(id) {
@@ -6118,7 +6863,7 @@
         break;
 
       case 'back-to-reports':
-        setView('reports');
+        backFromReport();
         break;
 
       case 'back-to-form':
@@ -6179,6 +6924,7 @@
         state.performanceFilters.teacherGroup = actionElement.dataset.key || '';
         syncPerformanceControls();
         renderPerformance();
+        focusTeacherHistory();
         break;
 
       case 'export-backup':
@@ -6220,7 +6966,10 @@
         break;
 
       case 'open-report':
-        openReportById(id);
+        openReportById(id, {
+          returnView: actionElement.dataset.returnView,
+          anchor: actionElement.dataset.anchor
+        });
         break;
 
       case 'print-record':

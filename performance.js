@@ -87,15 +87,33 @@ window.ObservaEduPerformance = (function () {
     const list = [];
     const byId = new Map();
     const byName = new Map();
+    const legacyByName = new Map();
     const usedIds = normalizedTeacherId(teachers);
+
+    /*
+     * Registra o nome para o fallback de registros antigos. Quando dois
+     * professores diferentes têm exatamente o mesmo nome normalizado, o
+     * fallback por nome fica ambíguo e não deve apontar para nenhum deles.
+     * Assim, o identificador estável continua sendo a única forma segura de
+     * separar professores homônimos.
+     */
+    function registerName(name, entry) {
+      const key = searchKey(name);
+      if (byName.has(key)) {
+        byName.set(key, null);
+        return;
+      }
+      byName.set(key, entry);
+    }
 
     (teachers || []).forEach(function (raw) {
       const teacher = raw && typeof raw === 'object' ? raw : {};
       const name = clean(teacher.name);
       if (!name) return;
       const key = searchKey(name);
-      if (byName.has(key)) return;
       const id = clean(teacher.id);
+      if (id && byId.has(id)) return;
+      if (!id && byName.has(key)) return;
       const entry = {
         id: id,
         name: name,
@@ -106,7 +124,7 @@ window.ObservaEduPerformance = (function () {
         groupKey: id ? 'id:' + id : 'name:' + key
       };
       list.push(entry);
-      byName.set(key, entry);
+      registerName(name, entry);
       if (id) byId.set(id, entry);
     });
 
@@ -121,13 +139,12 @@ window.ObservaEduPerformance = (function () {
       const key = searchKey(name);
       const id = clean(ident.professorId);
 
-      // Professor cadastrado e ainda ativo: usa o nome atual do cadastro.
+      // Professor cadastrado: o vínculo é sempre pelo identificador.
       if (id && byId.has(id)) return;
-      // Registro antigo cujo nome corresponde a um professor cadastrado.
-      if (!id && byName.has(key)) return;
+      // Registro antigo cujo nome corresponde a um único professor cadastrado.
+      if (!id && byName.get(key)) return;
 
       if (id) {
-        if (byId.has(id)) return;
         const entry = {
           id: id,
           name: name,
@@ -139,11 +156,13 @@ window.ObservaEduPerformance = (function () {
         };
         list.push(entry);
         byId.set(id, entry);
-        if (!byName.has(key)) byName.set(key, entry);
+        registerName(name, entry);
         return;
       }
 
-      if (byName.has(key)) return;
+      // Sem identificador, o nome é o único vínculo disponível. Se houver
+      // homônimos cadastrados, este grupo legado permanece separado deles.
+      if (legacyByName.has(key)) return;
       const entry = {
         id: '',
         name: name,
@@ -154,7 +173,8 @@ window.ObservaEduPerformance = (function () {
         groupKey: 'name:' + key
       };
       list.push(entry);
-      byName.set(key, entry);
+      legacyByName.set(key, entry);
+      registerName(name, entry);
     });
 
     list.sort(function (a, b) {
@@ -167,13 +187,14 @@ window.ObservaEduPerformance = (function () {
   function resolveGroupKey(identification, directory) {
     const ident = identification || {};
     const id = clean(ident.professorId);
-    if (id && directory && directory.byId.has(id)) {
-      return directory.byId.get(id).groupKey;
-    }
+    // O identificador estável prevalece sempre. Nunca usar o nome para
+    // "completar" um vínculo que já possui professorId.
+    if (id) return 'id:' + id;
     const name = clean(ident.professor);
-    if (name && directory && directory.byName.has(searchKey(name))) {
-      return directory.byName.get(searchKey(name)).groupKey;
-    }
+    if (!name) return '';
+    const key = searchKey(name);
+    const named = directory && directory.byName ? directory.byName.get(key) : null;
+    if (named) return named.groupKey;
     return teacherGroupKey(ident);
   }
 
@@ -571,9 +592,11 @@ window.ObservaEduPerformance = (function () {
     };
   }
 
-  // Histórico individual: inclui rascunhos e concluídas do professor.
+  // Histórico individual: inclui rascunhos e concluídas do professor. O
+  // chamador separa os status para não apresentar rascunho como concluído.
   function teacherHistory(observations, directory, groupKey, filters) {
     const config = filters || {};
+    const month = config.month ? String(Number(config.month)).padStart(2, '0') : '';
     const rows = (observations || []).filter(function (record) {
       const ident = (record && record.identificacao) || {};
       if (resolveGroupKey(ident, directory) !== groupKey) return false;
@@ -582,16 +605,34 @@ window.ObservaEduPerformance = (function () {
       if (config.turma && clean(ident.turma) !== config.turma) return false;
       const date = clean(ident.data);
       if (config.year && academicYear(date) !== config.year) return false;
+      if (month) {
+        const parts = parseMonth(date);
+        if (!parts || String(parts.month).padStart(2, '0') !== month) return false;
+      }
       if (config.from && (!date || date < config.from)) return false;
       if (config.to && (!date || date > config.to)) return false;
       return true;
     });
 
+    const direction = config.order === 'asc' ? 1 : -1;
     rows.sort(function (a, b) {
       const aDate = clean(a.identificacao && a.identificacao.data);
       const bDate = clean(b.identificacao && b.identificacao.data);
-      if (aDate !== bDate) return bDate.localeCompare(aDate);
-      return (new Date(b.updatedAt).getTime() || 0) - (new Date(a.updatedAt).getTime() || 0);
+      // Registros sem data vão sempre para o fim, em qualquer ordenação.
+      if (!aDate && !bDate) {
+        return (
+          ((new Date(b.updatedAt).getTime() || 0) -
+            (new Date(a.updatedAt).getTime() || 0)) * direction
+        );
+      }
+      if (!aDate) return 1;
+      if (!bDate) return -1;
+      const dateOrder = aDate.localeCompare(bDate) * direction;
+      if (dateOrder !== 0) return dateOrder;
+      return (
+        ((new Date(b.updatedAt).getTime() || 0) -
+          (new Date(a.updatedAt).getTime() || 0)) * direction
+      );
     });
 
     return {
