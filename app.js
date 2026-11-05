@@ -6563,6 +6563,7 @@
     const normalizedKind = kind === 'performance' ? 'performance' : 'report';
     clearNode(container);
     container.appendChild(documentElement.cloneNode(true));
+    container.scrollTop = 0;
 
     state.printPreviewKind = normalizedKind;
     state.printPreviewTitle = clean(title) || 'Relatório';

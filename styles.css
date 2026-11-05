@@ -3293,12 +3293,20 @@ input[type="time"] {
 }
 
 /* Pré-visualização de impressão */
-.print-preview-dialog {
+/* A prévia é um diálogo de tela cheia com uma área interna rolável. A altura
+   é limitada ao viewport para que o documento nunca seja cortado; a barra de
+   ações fica fora da rolagem e permanece sempre visível. */
+.modal.print-preview-dialog {
   width: 100%;
   max-width: none;
+  height: calc(100vh - 24px - var(--safe-top) - var(--safe-bottom));
+  height: calc(100dvh - 24px - var(--safe-top) - var(--safe-bottom));
+  max-height: calc(100vh - 24px - var(--safe-top) - var(--safe-bottom));
+  max-height: calc(100dvh - 24px - var(--safe-top) - var(--safe-bottom));
   border: 0;
   padding: 0;
   background: transparent;
+  overflow: hidden;
 }
 
 .print-preview-shell {
@@ -3306,12 +3314,17 @@ input[type="time"] {
   flex-direction: column;
   gap: 16px;
   align-items: center;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
   padding: 20px 0;
+  box-sizing: border-box;
 }
 
 .print-preview-toolbar {
   width: 100%;
   max-width: 210mm;
+  flex: 0 0 auto;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -3329,6 +3342,27 @@ input[type="time"] {
   flex-direction: column;
   gap: 24px;
   align-items: center;
+  width: 100%;
+  flex: 1 1 auto;
+  min-height: 0;
+  padding: 2px 0 12px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Enquanto a prévia está aberta, a página de fundo não rola junto. */
+body.print-preview-open {
+  overflow: hidden;
+  overscroll-behavior: none;
+}
+
+@supports selector(:has(*)) {
+  html:has(body.print-preview-open) {
+    overflow: hidden;
+    overscroll-behavior: none;
+  }
 }
 
 .print-preview-pages .report-document {
@@ -3375,7 +3409,9 @@ input[type="time"] {
 }
 
 @media print {
-  .print-preview-dialog {
+  /* Na impressão não pode existir altura limitada nem rolagem: o documento
+     inteiro precisa fluir pelas folhas A4 e ser paginado pelo navegador. */
+  .modal.print-preview-dialog {
     position: static !important;
     display: block !important;
     background: transparent !important;
@@ -3385,18 +3421,32 @@ input[type="time"] {
     box-shadow: none !important;
     max-width: none !important;
     width: auto !important;
+    height: auto !important;
+    max-height: none !important;
+    overflow: visible !important;
   }
   .print-preview-toolbar {
     display: none !important;
   }
   .print-preview-shell {
+    display: block !important;
     padding: 0 !important;
     gap: 0 !important;
+    width: auto !important;
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
+    overflow: visible !important;
   }
   .print-preview-pages {
     display: block !important;
     gap: 0 !important;
+    width: auto !important;
+    height: auto !important;
+    max-height: none !important;
     padding: 0 !important;
+    overflow: visible !important;
+    overscroll-behavior: auto !important;
   }
   .print-preview-pages .report-document {
     box-shadow: none !important;
@@ -3405,6 +3455,12 @@ input[type="time"] {
     min-height: 0 !important;
     padding: 0 !important;
     margin: 0 !important;
+  }
+  body.print-preview-open {
+    overflow: visible !important;
+  }
+  html:has(body.print-preview-open) {
+    overflow: visible !important;
   }
 }
 
